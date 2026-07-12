@@ -1,112 +1,38 @@
 import { useMemo, useState } from "react";
 import { Minus, Plus, RotateCcw, MapPin } from "lucide-react";
 import { CROP_DATA, type CropKey, type Risk } from "./data";
+import {
+  MUNICIPIO_FEATURES,
+  VIEW_H,
+  VIEW_W,
+  type MunicipioFeature,
+} from "./municipios";
 import { cn } from "@/lib/utils";
-
-interface Region {
-  id: string;
-  province: string;
-  capital: string;
-  points: string;
-  labelX: number;
-  labelY: number;
-  factor: number;
-  risk: Record<CropKey, Risk>;
-}
-
-// Stylized polygonal representation of Santander's producing provinces.
-// Coordinates are hand-tuned within a 500x400 viewBox to loosely approximate
-// the real geography while keeping crisp, tileable regions.
-const REGIONS: Region[] = [
-  {
-    id: "mares",
-    province: "Mares",
-    capital: "Barrancabermeja",
-    points: "55,150 140,110 175,180 150,255 70,235",
-    labelX: 110,
-    labelY: 190,
-    factor: 0.85,
-    risk: { cacao: "Medio", cafe: "Alto", granadilla: "Alto" },
-  },
-  {
-    id: "yariguies",
-    province: "Yariguíes",
-    capital: "San Vicente de Chucurí",
-    points: "150,255 175,180 240,205 230,295 155,295",
-    labelX: 195,
-    labelY: 250,
-    factor: 1.15,
-    risk: { cacao: "Bajo", cafe: "Medio", granadilla: "Medio" },
-  },
-  {
-    id: "soto",
-    province: "Soto",
-    capital: "Bucaramanga",
-    points: "140,110 265,80 320,145 240,205 175,180",
-    labelX: 225,
-    labelY: 145,
-    factor: 1.0,
-    risk: { cacao: "Bajo", cafe: "Bajo", granadilla: "Bajo" },
-  },
-  {
-    id: "guanenta",
-    province: "Guanentá",
-    capital: "San Gil",
-    points: "320,145 395,150 380,230 300,240 240,205",
-    labelX: 325,
-    labelY: 195,
-    factor: 1.02,
-    risk: { cacao: "Bajo", cafe: "Bajo", granadilla: "Bajo" },
-  },
-  {
-    id: "garcia-rovira",
-    province: "García Rovira",
-    capital: "Málaga",
-    points: "395,150 460,175 448,255 380,230",
-    labelX: 425,
-    labelY: 205,
-    factor: 0.75,
-    risk: { cacao: "Alto", cafe: "Medio", granadilla: "Medio" },
-  },
-  {
-    id: "comunera",
-    province: "Comunera",
-    capital: "Socorro",
-    points: "230,295 300,240 380,230 360,320 260,340",
-    labelX: 310,
-    labelY: 290,
-    factor: 0.95,
-    risk: { cacao: "Medio", cafe: "Bajo", granadilla: "Bajo" },
-  },
-  {
-    id: "velez",
-    province: "Vélez",
-    capital: "Vélez",
-    points: "155,295 230,295 260,340 235,370 160,360",
-    labelX: 205,
-    labelY: 335,
-    factor: 0.9,
-    risk: { cacao: "Medio", cafe: "Bajo", granadilla: "Medio" },
-  },
-];
 
 const RISK_FILL: Record<Risk, string> = {
   Bajo: "fill-risk-low",
   Medio: "fill-risk-med",
   Alto: "fill-risk-high",
 };
-
 const RISK_TEXT: Record<Risk, string> = {
   Bajo: "text-risk-low",
   Medio: "text-risk-med",
   Alto: "text-risk-high",
 };
-
 const RISK_DOT: Record<Risk, string> = {
   Bajo: "bg-risk-low",
   Medio: "bg-risk-med",
   Alto: "bg-risk-high",
 };
+
+// Label only the biggest municipalities so the map stays readable.
+const LABEL_TOP_N = 14;
+const LABELED_IDS = new Set(
+  [...MUNICIPIO_FEATURES]
+    .sort((a, b) => b.area - a.area)
+    .slice(0, LABEL_TOP_N)
+    .map((m) => m.id),
+);
 
 interface Props {
   crop: CropKey;
@@ -120,25 +46,23 @@ export function SantanderMap({ crop, selected, onSelect }: Props) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
-  const selectedRegion = useMemo(
-    () =>
-      REGIONS.find((r) => r.capital === selected) ??
-      REGIONS.find((r) => r.id === "yariguies")!,
+  const selectedFeature = useMemo<MunicipioFeature | undefined>(
+    () => MUNICIPIO_FEATURES.find((m) => m.name === selected),
     [selected],
   );
 
-  const activeRegion =
-    REGIONS.find((r) => r.id === hover) ?? selectedRegion;
+  const activeFeature =
+    MUNICIPIO_FEATURES.find((m) => m.id === hover) ?? selectedFeature;
 
   const viewBox = useMemo(() => {
-    const w = 500 / zoom;
-    const h = 400 / zoom;
-    const cx = 250 - w / 2 + pan.x;
-    const cy = 200 - h / 2 + pan.y;
+    const w = VIEW_W / zoom;
+    const h = VIEW_H / zoom;
+    const cx = VIEW_W / 2 - w / 2 + pan.x;
+    const cy = VIEW_H / 2 - h / 2 + pan.y;
     return `${cx} ${cy} ${w} ${h}`;
   }, [zoom, pan]);
 
-  const zoomIn = () => setZoom((z) => Math.min(2.4, +(z + 0.25).toFixed(2)));
+  const zoomIn = () => setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)));
   const zoomOut = () => setZoom((z) => Math.max(1, +(z - 0.25).toFixed(2)));
   const reset = () => {
     setZoom(1);
@@ -173,34 +97,45 @@ export function SantanderMap({ crop, selected, onSelect }: Props) {
               />
             </pattern>
             <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="1.2" />
+              <feGaussianBlur stdDeviation="1.4" />
             </filter>
           </defs>
 
-          <rect x="0" y="0" width="500" height="400" fill="url(#grid)" />
+          <rect x="0" y="0" width={VIEW_W} height={VIEW_H} fill="url(#grid)" />
 
-          {/* Soft outer glow silhouette */}
+          {/* Soft outer glow silhouette of the whole department */}
           <g filter="url(#soft)" opacity="0.35">
-            {REGIONS.map((r) => (
-              <polygon
-                key={`glow-${r.id}`}
-                points={r.points}
+            {MUNICIPIO_FEATURES.map((m) => (
+              <path
+                key={`glow-${m.id}`}
+                d={m.path}
                 className="fill-primary/20"
               />
             ))}
           </g>
 
-          {/* Region polygons */}
-          {REGIONS.map((r) => {
-            const risk = r.risk[crop];
-            const isSelected = r.capital === selected;
-            const isHover = r.id === hover;
+          {/* Municipality choropleth */}
+          {MUNICIPIO_FEATURES.map((m) => {
+            const risk = m.risk[crop];
+            const isSelected = m.name === selected;
+            const isHover = m.id === hover;
             return (
-              <g
-                key={r.id}
-                className="cursor-pointer"
+              <path
+                key={m.id}
+                d={m.path}
+                className={cn(
+                  RISK_FILL[risk],
+                  "cursor-pointer stroke-background transition-all duration-200 ease-out",
+                  "hover:[filter:brightness(1.1)]",
+                  isHover ? "opacity-100" : "opacity-85",
+                )}
+                strokeWidth={isSelected ? 1.4 : 0.6}
+                stroke={isSelected ? "currentColor" : undefined}
+                style={{
+                  color: isSelected ? "hsl(var(--foreground))" : undefined,
+                }}
                 onMouseEnter={(e) => {
-                  setHover(r.id);
+                  setHover(m.id);
                   const rect = (
                     e.currentTarget.ownerSVGElement as SVGSVGElement
                   ).getBoundingClientRect();
@@ -218,79 +153,50 @@ export function SantanderMap({ crop, selected, onSelect }: Props) {
                     y: e.clientY - rect.top,
                   });
                 }}
-                onClick={() => onSelect(r.capital)}
-              >
-                <polygon
-                  points={r.points}
-                  className={cn(
-                    RISK_FILL[risk],
-                    "stroke-background transition-all duration-200 ease-out",
-                    "hover:opacity-95 hover:[filter:brightness(1.08)]",
-                    isHover ? "opacity-100" : "opacity-80",
-                  )}
-                  strokeWidth={isSelected ? 2.5 : 1.4}
-                  style={{
-                    transformOrigin: `${r.labelX}px ${r.labelY}px`,
-                    transform: isHover ? "scale(1.015)" : "scale(1)",
-                    transition: "transform 200ms ease-out",
-                  }}
-                />
-                {isSelected && (
-                  <polygon
-                    points={r.points}
-                    fill="none"
-                    className="stroke-foreground"
-                    strokeWidth={2}
-                    strokeDasharray="4 3"
-                    opacity="0.7"
-                  />
-                )}
-                <text
-                  x={r.labelX}
-                  y={r.labelY}
-                  textAnchor="middle"
-                  className={cn(
-                    "pointer-events-none select-none text-[11px] font-semibold",
-                    "fill-white [paint-order:stroke] [stroke:rgba(0,0,0,0.35)] [stroke-width:2px]",
-                  )}
-                >
-                  {r.province}
-                </text>
-                <text
-                  x={r.labelX}
-                  y={r.labelY + 12}
-                  textAnchor="middle"
-                  className="pointer-events-none select-none fill-white/85 text-[8.5px] font-medium"
-                >
-                  {r.capital.split(" ")[0]}
-                </text>
-              </g>
+                onClick={() => onSelect(m.name)}
+              />
             );
           })}
 
+          {/* Labels for the largest municipalities */}
+          {MUNICIPIO_FEATURES.filter((m) => LABELED_IDS.has(m.id)).map((m) => (
+            <text
+              key={`lbl-${m.id}`}
+              x={m.cx}
+              y={m.cy}
+              textAnchor="middle"
+              className={cn(
+                "pointer-events-none select-none text-[6px] font-semibold",
+                "fill-white [paint-order:stroke] [stroke:rgba(0,0,0,0.5)] [stroke-width:1.2px]",
+              )}
+            >
+              {m.name}
+            </text>
+          ))}
+
           {/* Compass */}
-          <g transform="translate(455, 40)" className="pointer-events-none">
+          <g transform="translate(475, 22)" className="pointer-events-none">
             <circle
-              r="14"
-              className="fill-background/80 stroke-border"
-              strokeWidth="1"
+              r="12"
+              className="fill-background/85 stroke-border"
+              strokeWidth="0.8"
             />
             <text
-              y="-4"
+              y="-3"
               textAnchor="middle"
-              className="fill-foreground text-[8px] font-bold"
+              className="fill-foreground text-[7px] font-bold"
             >
               N
             </text>
             <path
-              d="M 0 -10 L 3 0 L 0 -3 L -3 0 Z"
+              d="M 0 -8 L 2 0 L 0 -2 L -2 0 Z"
               className="fill-primary"
-              transform="translate(0, 6)"
+              transform="translate(0, 5)"
             />
           </g>
         </svg>
 
-        {/* Zoom / pan controls */}
+        {/* Zoom controls */}
         <div className="absolute right-3 top-3 flex flex-col overflow-hidden rounded-xl border border-border bg-background/90 shadow-sm backdrop-blur">
           <button
             onClick={zoomIn}
@@ -359,14 +265,12 @@ export function SantanderMap({ crop, selected, onSelect }: Props) {
         {/* Legend */}
         <div className="absolute bottom-3 left-3 rounded-xl border border-border bg-background/90 px-3 py-2 shadow-sm backdrop-blur">
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Riesgo climático
+            Riesgo climático · {MUNICIPIO_FEATURES.length} municipios
           </p>
           <div className="flex items-center gap-3 text-[11px]">
             {(["Bajo", "Medio", "Alto"] as Risk[]).map((r) => (
               <span key={r} className="flex items-center gap-1.5">
-                <span
-                  className={cn("h-2.5 w-2.5 rounded-sm", RISK_DOT[r])}
-                />
+                <span className={cn("h-2.5 w-2.5 rounded-sm", RISK_DOT[r])} />
                 <span className="font-medium text-foreground">{r}</span>
               </span>
             ))}
@@ -381,21 +285,21 @@ export function SantanderMap({ crop, selected, onSelect }: Props) {
           <span>50 km</span>
         </div>
 
-        {/* Floating tooltip (shadcn-styled) */}
-        {hover && tip && activeRegion && (
+        {/* Floating tooltip */}
+        {hover && tip && activeFeature && (
           <div
-            className="pointer-events-none absolute z-20 min-w-[220px] -translate-x-1/2 -translate-y-full rounded-xl border border-border bg-popover px-3 py-2.5 text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95"
+            className="pointer-events-none absolute z-20 min-w-[240px] -translate-x-1/2 -translate-y-full rounded-xl border border-border bg-popover px-3 py-2.5 text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95"
             style={{
-              left: Math.max(120, Math.min(tip.x, 9999)),
-              top: Math.max(80, tip.y - 12),
+              left: Math.max(130, Math.min(tip.x, 9999)),
+              top: Math.max(90, tip.y - 12),
             }}
           >
             <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               <MapPin className="h-3 w-3" />
-              Provincia de {activeRegion.province}
+              Santander
             </div>
             <p className="mt-0.5 text-sm font-bold text-foreground">
-              {activeRegion.capital}
+              {activeFeature.name}
             </p>
             <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-2 text-xs">
               <div>
@@ -405,11 +309,9 @@ export function SantanderMap({ crop, selected, onSelect }: Props) {
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground">
-                  Rendimiento
-                </p>
+                <p className="text-[10px] text-muted-foreground">Rendimiento</p>
                 <p className="font-semibold text-foreground">
-                  {(CROP_DATA[crop].baseYield * activeRegion.factor).toFixed(
+                  {(CROP_DATA[crop].baseYield * activeFeature.factor).toFixed(
                     2,
                   )}{" "}
                   t/ha
@@ -422,16 +324,16 @@ export function SantanderMap({ crop, selected, onSelect }: Props) {
                 <p
                   className={cn(
                     "flex items-center gap-1.5 text-sm font-semibold",
-                    RISK_TEXT[activeRegion.risk[crop]],
+                    RISK_TEXT[activeFeature.risk[crop]],
                   )}
                 >
                   <span
                     className={cn(
                       "h-2 w-2 rounded-full",
-                      RISK_DOT[activeRegion.risk[crop]],
+                      RISK_DOT[activeFeature.risk[crop]],
                     )}
                   />
-                  {activeRegion.risk[crop]}
+                  {activeFeature.risk[crop]}
                 </p>
               </div>
             </div>
