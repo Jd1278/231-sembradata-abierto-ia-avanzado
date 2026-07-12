@@ -40,7 +40,9 @@ const MONTHS = [
 
 export function Dashboard() {
   const [crop, setCrop] = useState<CropKey>("cacao");
-  const [municipio, setMunicipio] = useState<string>("San Vicente de Chucurí");
+  const [municipio, setMunicipio] = useState<string>(
+    MUNICIPIOS.find((m) => /vicente/i.test(m.name))?.name ?? MUNICIPIOS[0].name,
+  );
   const [year, setYear] = useState<string>("2026");
   const [month, setMonth] = useState<string>("Mar");
 
