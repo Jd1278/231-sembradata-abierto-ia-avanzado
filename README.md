@@ -28,7 +28,9 @@
 ### 🚀 &nbsp; [**➡️ &nbsp; Abrir SembraData en Vercel &nbsp; ⬅️**](https://231-sembradata-abierto-ia-avanzado.vercel.app) &nbsp; 🚀
 
 **`https://231-sembradata-abierto-ia-avanzado.vercel.app`**
-
+>[PRESENTACIÓN DEL PROYECTO]
+>A continuación encontrará una presentación ejecutiva sobre el proyecto sembradata
+###  &nbsp; [**➡️ &nbsp; Abrir presentación sembradata &nbsp; ⬅️**](https://gamma.app/docs/Prediccion-Agroclimatica-para-Santander-1m0u0el9tewy1ul) &nbsp; 
 </div>
 
 ---
@@ -93,7 +95,7 @@
 
 ## 📄 Licencia
 
-Distribuido bajo la **Licencia MIT**. Consulta el archivo `LICENSE` para más detalles.
+Distribuido bajo la **Licencia MIT**. 
 
 <br/>
 
