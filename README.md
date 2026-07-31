@@ -26,9 +26,9 @@
 
 <div align="center">
 
-### [Abrir SembraData en Vercel](https://231-sembradata-abierto-ia-avanzado-is1xwtdzb.vercel.app/)
+### [Abrir SembraData en Vercel](https://231-sembradata-abierto-ia-avanzado.vercel.app/)
 
-**`https://231-sembradata-abierto-ia-avanzado-is1xwtdzb.vercel.app/`**
+**`https://231-sembradata-abierto-ia-avanzado.vercel.app/`**
 
 </div>
 
