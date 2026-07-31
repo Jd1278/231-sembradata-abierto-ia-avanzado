@@ -1,0 +1,7 @@
+name: sembradata
+channels:
+  - defaults
+dependencies:
+  - nodejs>=20.0.0
+  - bun>=1.2.0
+  - typescript>=5.8.0

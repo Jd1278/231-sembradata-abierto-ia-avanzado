@@ -1,0 +1,138 @@
+import { createClient } from "@supabase/supabase-js";
+import type {
+  MunicipioDB,
+  CultivoDB,
+  ClimaMensual,
+  RendimientoHistorico,
+  RiesgoAgroclimatico,
+  Prediccion,
+} from "../types/database";
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? "";
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
+
+export const supabase = createClient(
+  supabaseUrl || "https://placeholder.supabase.co",
+  supabaseKey || "placeholder",
+);
+
+export function isSupabaseConfigured(): boolean {
+  return Boolean(supabaseUrl && supabaseKey && !supabaseUrl.includes("placeholder"));
+}
+
+export async function getMunicipios(): Promise<MunicipioDB[]> {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    const { data, error } = await supabase.from("municipios").select("*").order("nombre");
+    if (error) throw error;
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getCultivos(): Promise<CultivoDB[]> {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    const { data, error } = await supabase.from("cultivos").select("*").order("nombre");
+    if (error) throw error;
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getClimaMensual(
+  municipioId: string,
+  anio: number,
+  mes?: number,
+): Promise<ClimaMensual[]> {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    let query = supabase
+      .from("clima_mensual")
+      .select("*")
+      .eq("municipio_id", municipioId)
+      .eq("anio", anio)
+      .order("mes");
+    if (mes !== undefined) {
+      query = query.eq("mes", mes);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getRendimientoHistorico(
+  municipioId: string,
+  cultivoId: string,
+  anioGte?: number,
+  anioLte?: number,
+): Promise<RendimientoHistorico[]> {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    let query = supabase
+      .from("rendimiento_historico")
+      .select("*")
+      .eq("municipio_id", municipioId)
+      .eq("cultivo_id", cultivoId)
+      .order("anio");
+    if (anioGte !== undefined) query = query.gte("anio", anioGte);
+    if (anioLte !== undefined) query = query.lte("anio", anioLte);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getRiesgoAgroclimatico(
+  municipioId: string,
+  cultivoId: string,
+  anio: number,
+  mes?: number,
+): Promise<RiesgoAgroclimatico[]> {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    let query = supabase
+      .from("riesgo_agroclimatico")
+      .select("*")
+      .eq("municipio_id", municipioId)
+      .eq("cultivo_id", cultivoId)
+      .eq("anio", anio)
+      .order("mes");
+    if (mes !== undefined) query = query.eq("mes", mes);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getPredicciones(
+  municipioId: string,
+  cultivoId: string,
+  anioGte?: number,
+): Promise<Prediccion[]> {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    let query = supabase
+      .from("predicciones")
+      .select("*")
+      .eq("municipio_id", municipioId)
+      .eq("cultivo_id", cultivoId)
+      .order("anio")
+      .order("mes");
+    if (anioGte !== undefined) query = query.gte("anio", anioGte);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}

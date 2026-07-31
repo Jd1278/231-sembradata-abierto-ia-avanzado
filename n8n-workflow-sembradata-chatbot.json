@@ -1,0 +1,111 @@
+{
+  "name": "SembraData Chatbot",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "sembradata-chat",
+      "parameters": {
+        "path": "sembradata-chat",
+        "options": {},
+        "responseMode": "lastNode",
+        "responseData": "allEntries",
+        "httpMethod": "POST"
+      }
+    },
+    {
+      "id": "buildPayload",
+      "name": "Construir Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "parameters": {
+        "language": "javaScript",
+        "code": "const systemPrompt = `Eres AsistenteAgro, un asistente de inteligencia artificial especializado en agricultura de Colombia.\n\nCONTEXTO:\n- País: Colombia\n- Plataforma: SembraData - Predicción agroclimática nacional\n- Cultivos principales: Cacao, Café, Granadilla\n\nCONOCIMIENTO POR CULTIVO:\n- Cacao: Rendimiento 0.85-2.5 Ton/Ha, siembra abr-may, temp 20-28°C, humedad 70-90%, suelo pH 5.0-7.0\n- Café: Rendimiento 1.2-2.5 Ton/Ha, siembra mar-abr, altitud 1200-1800 msnm, temp 17-24°C\n- Granadilla: Rendimiento 9.5-15 Ton/Ha, siembra sep-oct, temp 18-24°C, humedad 60-80%\n\nCLIMA DE COLOMBIA:\n- Región Caribe: Tropical seco, temp 24-35°C\n- Región Andina: Tropical de montaña, temp 12-24°C\n- Región Pacífica: Tropical húmedo, lluvias 3000-8000 mm/año\n- Región Orinoquía: Sabana tropical, temp 24-28°C\n- Región Amazonía: Ecuatorial, temp 22-28°C\n\nINSTRUCCIONES:\n- Responde en español, conciso y práctico\n- Usa markdown\n- Máximo 3-4 párrafos\n- Relaciona la respuesta con Colombia y el contexto del municipio/cultivo`;\n\nconst input = $input.first().json;\nconst ctx = input.context || {};\nconst kb = input.knowledgeContext?.entries || [];\n\nlet ragSection = '';\nif (kb.length > 0) {\n  ragSection = '\\n\\nINFORMACIÓN RELEVANTE DE LA BASE DE CONOCIMIENTO:\\n' + kb.map((e, i) => `${i + 1}. ${e.question}\\n   ${e.answer}`).join('\\n');\n}\n\nconst userContext = `Pregunta del usuario: ${input.message}\n\nContexto adicional:\n- Municipio: ${ctx.municipio || 'No especificado'}\n- Departamento: ${ctx.departamento || 'No especificado'}\n- Cultivo seleccionado: ${ctx.cultivo || 'No especificado'}\n- Nivel de riesgo actual: ${ctx.riesgo || 'No disponible'}`;\n\nconst model = $env.MODEL_NAME || 'gpt-4o-mini';\n\nreturn [{\n  json: {\n    body: {\n      model: model,\n      messages: [\n        { role: 'system', content: systemPrompt + ragSection },\n        { role: 'user', content: userContext }\n      ],\n      max_tokens: 600,\n      temperature: 0.7\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "llmRequest",
+      "name": "LLM Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [750, 300],
+      "parameters": {
+        "url": "={{ $env.LLM_API_URL || 'https://api.openai.com/v1/chat/completions' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {},
+        "options": {
+          "timeout": 30000
+        },
+        "method": "POST",
+        "jsonBody": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.LLM_API_KEY }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "formatResponse",
+      "name": "Formatear Respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 300],
+      "parameters": {
+        "language": "javaScript",
+        "code": "// Soporta OpenAI (choices[].message.content), Ollama (message.content), y otros formatos\nconst body = $input.first().json;\nconst content = body.choices?.[0]?.message?.content\n  || body.message?.content\n  || body.reply\n  || body.response\n  || 'No pude generar una respuesta.';\n\nreturn [{\n  json: {\n    reply: content,\n    source: 'n8n',\n    confidence: 0.85,\n    metadata: {\n      variablesUsadas: ['temperatura', 'precipitación', 'humedad', 'tipo de cultivo', 'altitud'],\n      fuentes: ['Open-Meteo', 'NASA POWER', 'SoilGrids', 'Base de conocimiento SembraData'],\n      fechaActualizacion: new Date().toISOString().slice(0, 10)\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "fallbackResponse",
+      "name": "Respuesta Fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 550],
+      "parameters": {
+        "language": "javaScript",
+        "code": "return [{\n  json: {\n    reply: 'Lo siento, no pude procesar tu consulta. El servicio de IA no está disponible en este momento. Por favor intenta de nuevo más tarde.',\n    source: 'fallback',\n    confidence: 0.1,\n    metadata: {\n      fuentes: [],\n      fechaActualizacion: new Date().toISOString().slice(0, 10)\n    }\n  }\n}];"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Construir Payload", "type": "main", "index": 0 }]
+      ]
+    },
+    "Construir Payload": {
+      "main": [
+        [{ "node": "LLM Request", "type": "main", "index": 0 }]
+      ]
+    },
+    "LLM Request": {
+      "main": [
+        [{ "node": "Formatear Respuesta", "type": "main", "index": 0 }]
+      ]
+    },
+    "Formatear Respuesta": {
+      "main": [
+        []
+      ]
+    },
+    "Respuesta Fallback": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {},
+  "tags": [],
+  "versionId": "1"
+}

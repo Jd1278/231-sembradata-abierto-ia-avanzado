@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: sembradata
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NITRO_PRESET
+        value: node-server
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: VITE_IDEAM_APP_TOKEN
+        sync: false
+      # Note: Groq API key (GROQ_API_KEY) is configured in Supabase Edge Functions (server-side)
+      # Note: All external APIs (Open-Meteo, NASA POWER, IDEAM, SoilGrids,
+      #       Commodity Forecast) are free and do not require API keys.

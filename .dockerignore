@@ -1,0 +1,33 @@
+node_modules
+.git
+.github
+dist
+.output
+.vercel
+.nitro
+.tanstack
+.wrangler
+*.log
+.env
+.env.local
+.env.production
+RECURSOS
+estructura repositorio
+info bd
+reports
+notebooks
+data/raw
+data/processed
+data/realtime
+data/external
+models
+tests
+docs
+config
+deployments
+.github
+.prettierrc
+.prettierignore
+eslint.config.js
+*.md
+instrucciones_Adaptabilidad

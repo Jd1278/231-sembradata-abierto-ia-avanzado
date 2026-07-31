@@ -1,0 +1,24 @@
+{
+  "masking_rules": [
+    {
+      "field": "nombre_productor",
+      "type": "partial_mask",
+      "pattern": "^.{2}",
+      "replacement": "**"
+    },
+    {
+      "field": "cedula",
+      "type": "full_mask",
+      "pattern": "\\d{10}",
+      "replacement": "**********"
+    },
+    {
+      "field": "telefono",
+      "type": "partial_mask",
+      "pattern": "^.{4}",
+      "replacement": "****"
+    }
+  ],
+  "anonymization_level": "standard",
+  "retention_period_days": 365
+}

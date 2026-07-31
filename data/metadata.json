@@ -1,0 +1,18 @@
+{
+  "pipeline": {
+    "version": "0.1.0",
+    "lastRun": null,
+    "schedule": {
+      "ideam": "0 2 * * *",
+      "nasaPower": "0 3 * * 0",
+      "commodities": "0 * * * *"
+    },
+    "tables": {
+      "ideam_cache": { "ttl": "48h", "description": "IDEAM climate station data" },
+      "nasa_power_cache": { "ttl": "14d", "description": "NASA POWER satellite data" },
+      "commodity_cache": { "ttl": "6h", "description": "Commodity price forecasts" },
+      "analysis_history": { "ttl": "infinite", "description": "User analysis records" },
+      "clima_mensual": { "ttl": "infinite", "description": "Monthly climate summaries" }
+    }
+  }
+}

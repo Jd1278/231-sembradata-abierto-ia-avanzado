@@ -1,0 +1,324 @@
+export interface ClimateData {
+  temperature: number;
+  temperatureMax: number;
+  temperatureMin: number;
+  humidity: number;
+  precipitation: number;
+  windSpeed: number;
+  windDirection: number;
+  solarRadiation: number;
+  uvIndex: number;
+  cloudCover: number;
+  pressure: number;
+  evapotranspiration: number;
+  dailyData: DailyClimate[];
+  agriculturalIndex: AgriculturalIndices;
+}
+
+export interface DailyClimate {
+  date: string;
+  tempMax: number;
+  tempMin: number;
+  precip: number;
+  humidity: number;
+  windSpeed: number;
+  solarRad: number;
+  uvIndex: number;
+}
+
+export interface HistoricalSummary {
+  period: { start: string; end: string };
+  avgTemp: number;
+  totalPrecip: number;
+  avgHumidity: number;
+  daysAbove35: number;
+  daysBelow5: number;
+  frostDays: number;
+  dryDays: number;
+}
+
+export interface AgriculturalIndices {
+  GrowingDegreeDays: number;
+  aridityIndex: number;
+  moistureStressIndex: number;
+  frostRisk: number;
+  droughtRisk: number;
+}
+
+const BASE_URL = "https://api.open-meteo.com/v1";
+const FETCH_TIMEOUT_MS = 15000;
+
+async function fetchWithTimeout(url: string, options?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
+
+const DAILY_FIELDS = [
+  "temperature_2m_max",
+  "temperature_2m_min",
+  "precipitation_sum",
+  "relative_humidity_2m_mean",
+  "wind_speed_10m_mean",
+  "shortwave_radiation_sum",
+  "uv_index_max",
+].join(",");
+
+/**
+ * Rangos temporales óptimos para agricultura colombiana:
+ *
+ * | Horizonte   | Período     | Propósito                                  |
+ * |-------------|-------------|--------------------------------------------|
+ * | Corto       | 7–30 días   | Riego, cosecha, eventos extremos inmin.    |
+ * | Estación    | 90 días     | Condición actual + ventana de siembra      |
+ * | Semestral   | 180 días    | Ciclo cultivos transitorios (maíz, fríjol) |
+ * | Anual       | 365 días    | Ciclo fenológico completo (café, cacao)    |
+ * | Histórico   | 3–10 años   | Variabilidad ENSO, tendencias             |
+ * | Climático   | 30 años     | Cambio de aptitud de zonas                |
+ *
+ * Para evaluateViability, se recomienda 90–365 días para capturar
+ * las dos temporadas secas y lluviosas de la región Andina.
+ */
+export const OPTIMAL_TIME_RANGES = {
+  immediate: { pastDays: 7, label: "Inmediato" },
+  current: { pastDays: 90, label: "Estación actual" },
+  semiAnnual: { pastDays: 180, label: "Semestral" },
+  annual: { pastDays: 365, label: "Ciclo anual" },
+  historical: { pastDays: 365 * 5, label: "Histórico (5 años)" },
+  climate: { pastDays: 365 * 30, label: "Climático (30 años)" },
+} as const;
+
+function mapDailyData(raw: {
+  time: string[];
+  temperature_2m_max: number[];
+  temperature_2m_min: number[];
+  precipitation_sum: number[];
+  relative_humidity_2m_mean: number[];
+  wind_speed_10m_mean: number[];
+  shortwave_radiation_sum: number[];
+  uv_index_max: number[];
+}): DailyClimate[] {
+  return raw.time.map((date, i) => ({
+    date,
+    tempMax: raw.temperature_2m_max?.[i] ?? 0,
+    tempMin: raw.temperature_2m_min?.[i] ?? 0,
+    precip: raw.precipitation_sum?.[i] ?? 0,
+    humidity: raw.relative_humidity_2m_mean?.[i] ?? 0,
+    windSpeed: raw.wind_speed_10m_mean?.[i] ?? 0,
+    solarRad: raw.shortwave_radiation_sum?.[i] ?? 0,
+    uvIndex: raw.uv_index_max?.[i] ?? 0,
+  }));
+}
+
+function computeAgriculturalIndices(
+  dailyData: DailyClimate[],
+  avgTemp: number,
+  avgPrecip: number,
+  avgHumidity: number,
+): AgriculturalIndices {
+  const gdd = dailyData.reduce((sum, d) => {
+    const avg = (d.tempMax + d.tempMin) / 2;
+    return sum + Math.max(0, avg - 10);
+  }, 0);
+  const monthlyPrecip = avgPrecip * 30;
+  return {
+    GrowingDegreeDays: +gdd.toFixed(1),
+    aridityIndex: +(monthlyPrecip > 0 ? monthlyPrecip / (gdd * 0.002 + 0.5) : 0).toFixed(2),
+    moistureStressIndex: +(avgHumidity < 40 ? 1 : avgHumidity < 60 ? 0.5 : 0).toFixed(2),
+    frostRisk: +(dailyData.some((d) => d.tempMin < 2) ? 0.8 : 0).toFixed(2),
+    droughtRisk: +(monthlyPrecip < 30 ? 0.9 : monthlyPrecip < 60 ? 0.5 : 0.1).toFixed(2),
+  };
+}
+
+export async function fetchCurrentClimate(
+  lat: number,
+  lng: number,
+  pastDays = 90,
+): Promise<ClimateData> {
+  const params = new URLSearchParams({
+    latitude: lat.toString(),
+    longitude: lng.toString(),
+    current: [
+      "temperature_2m",
+      "relative_humidity_2m",
+      "precipitation",
+      "wind_speed_10m",
+      "wind_direction_10m",
+      "shortwave_radiation",
+      "uv_index",
+      "cloud_cover",
+      "surface_pressure",
+    ].join(","),
+    daily: DAILY_FIELDS,
+    timezone: "America/Bogota",
+    forecast_days: "7",
+    past_days: String(pastDays),
+  });
+
+  const res = await fetchWithTimeout(`${BASE_URL}/forecast?${params}`);
+  if (!res.ok) throw new Error(`Climate API error: ${res.status}`);
+  const data = await res.json();
+  const current = data.current;
+  const dailyData = mapDailyData(data.daily);
+
+  let tempSum = 0,
+    precipSum = 0,
+    humSum = 0,
+    solarSum = 0;
+  let maxTemp = -Infinity,
+    minTemp = Infinity;
+  for (const d of dailyData) {
+    const avg = (d.tempMax + d.tempMin) / 2;
+    tempSum += avg;
+    precipSum += d.precip;
+    humSum += d.humidity;
+    solarSum += d.solarRad;
+    if (d.tempMax > maxTemp) maxTemp = d.tempMax;
+    if (d.tempMin < minTemp) minTemp = d.tempMin;
+  }
+  const len = dailyData.length;
+  const avgTemp = len ? tempSum / len : 0;
+  const avgPrecip = len ? precipSum / len : 0;
+  const avgHumidity = len ? humSum / len : 0;
+  const avgSolarRad = len ? solarSum / len : 0;
+  const gdd = Math.max(0, avgTemp - 10);
+
+  return {
+    temperature: current.temperature_2m ?? avgTemp,
+    temperatureMax: len ? maxTemp : (current.temperature_2m ?? 0),
+    temperatureMin: len ? minTemp : (current.temperature_2m ?? 0),
+    humidity: current.relative_humidity_2m ?? avgHumidity,
+    precipitation: current.precipitation ?? avgPrecip,
+    windSpeed: current.wind_speed_10m ?? 0,
+    windDirection: current.wind_direction_10m ?? 0,
+    solarRadiation: current.shortwave_radiation ?? avgSolarRad,
+    uvIndex: current.uv_index ?? 0,
+    cloudCover: current.cloud_cover ?? 0,
+    pressure: current.surface_pressure ?? 1013,
+    evapotranspiration: +(gdd * 0.15).toFixed(1),
+    dailyData,
+    agriculturalIndex: computeAgriculturalIndices(dailyData, avgTemp, avgPrecip, avgHumidity),
+  };
+}
+
+export async function fetchHistoricalClimate(
+  lat: number,
+  lng: number,
+  startDate: string,
+  endDate: string,
+): Promise<ClimateData> {
+  const params = new URLSearchParams({
+    latitude: lat.toString(),
+    longitude: lng.toString(),
+    start_date: startDate,
+    end_date: endDate,
+    daily: DAILY_FIELDS,
+    timezone: "America/Bogota",
+  });
+
+  const res = await fetchWithTimeout(`${ARCHIVE_URL}?${params}`);
+  if (!res.ok) throw new Error(`Historical climate API error: ${res.status}`);
+  const data = await res.json();
+  const dailyData = mapDailyData(data.daily);
+
+  let tempSum = 0,
+    precipSum = 0,
+    humSum = 0,
+    solarSum = 0,
+    windSum = 0,
+    uvSum = 0;
+  let maxTemp = -Infinity,
+    minTemp = Infinity;
+  for (const d of dailyData) {
+    const avg = (d.tempMax + d.tempMin) / 2;
+    tempSum += avg;
+    precipSum += d.precip;
+    humSum += d.humidity;
+    solarSum += d.solarRad;
+    windSum += d.windSpeed;
+    uvSum += d.uvIndex;
+    if (d.tempMax > maxTemp) maxTemp = d.tempMax;
+    if (d.tempMin < minTemp) minTemp = d.tempMin;
+  }
+  const len = dailyData.length;
+  const avgTemp = len ? tempSum / len : 0;
+  const avgPrecip = len ? precipSum / len : 0;
+  const avgHumidity = len ? humSum / len : 0;
+  const avgSolarRad = len ? solarSum / len : 0;
+  const avgWind = len ? windSum / len : 0;
+  const avgUv = len ? uvSum / len : 0;
+  const gdd = Math.max(0, avgTemp - 10);
+
+  return {
+    temperature: avgTemp,
+    temperatureMax: len ? maxTemp : 0,
+    temperatureMin: len ? minTemp : 0,
+    humidity: avgHumidity,
+    precipitation: avgPrecip,
+    windSpeed: avgWind,
+    windDirection: 0,
+    solarRadiation: avgSolarRad,
+    uvIndex: avgUv,
+    cloudCover: 0,
+    pressure: 1013,
+    evapotranspiration: +(gdd * 0.15).toFixed(1),
+    dailyData,
+    agriculturalIndex: computeAgriculturalIndices(dailyData, avgTemp, avgPrecip, avgHumidity),
+  };
+}
+
+export async function fetchRecentHistory(lat: number, lng: number): Promise<HistoricalSummary> {
+  const params = new URLSearchParams({
+    latitude: lat.toString(),
+    longitude: lng.toString(),
+    daily: DAILY_FIELDS,
+    timezone: "America/Bogota",
+    past_days: "90",
+    forecast_days: "0",
+  });
+
+  const res = await fetchWithTimeout(`${BASE_URL}/forecast?${params}`);
+  if (!res.ok) throw new Error(`Climate API error: ${res.status}`);
+  const data = await res.json();
+  const dailyData = mapDailyData(data.daily);
+
+  let tempSum = 0,
+    precipSum = 0,
+    humSum = 0;
+  let daysAbove35 = 0,
+    daysBelow5 = 0,
+    frostDays = 0,
+    dryDays = 0;
+  for (const d of dailyData) {
+    tempSum += (d.tempMax + d.tempMin) / 2;
+    precipSum += d.precip;
+    humSum += d.humidity;
+    if (d.tempMax > 35) daysAbove35++;
+    if (d.tempMin < 5) daysBelow5++;
+    if (d.tempMin < 0) frostDays++;
+    if (d.precip < 1) dryDays++;
+  }
+  const len = dailyData.length;
+  const avgTemp = len ? tempSum / len : 0;
+  const totalPrecip = precipSum;
+  const avgHumidity = len ? humSum / len : 0;
+
+  const dates = dailyData.map((d) => d.date);
+
+  return {
+    period: { start: dates[0] ?? "", end: dates[dates.length - 1] ?? "" },
+    avgTemp: +avgTemp.toFixed(1),
+    totalPrecip: +totalPrecip.toFixed(1),
+    avgHumidity: +avgHumidity.toFixed(1),
+    daysAbove35,
+    daysBelow5,
+    frostDays,
+    dryDays,
+  };
+}

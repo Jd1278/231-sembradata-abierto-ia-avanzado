@@ -1,0 +1,10 @@
+{
+  "model_type": "gradient_boosting",
+  "n_estimators": 200,
+  "max_depth": 6,
+  "learning_rate": 0.1,
+  "min_samples_split": 5,
+  "min_samples_leaf": 3,
+  "subsample": 0.8,
+  "random_state": 42
+}

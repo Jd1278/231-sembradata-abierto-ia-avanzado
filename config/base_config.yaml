@@ -1,0 +1,61 @@
+# Configuración base de la aplicación
+app:
+  name: sembradata
+  version: 0.5.0
+  environment: production
+
+# Supabase
+supabase:
+  url: ${SUPABASE_URL}
+  anon_key: ${SUPABASE_ANON_KEY}
+
+# Cultivos soportados
+crops:
+  - key: cacao
+    label: Cacao
+    base_yield: 0.85
+    window: abril – mayo
+    regions:
+      - Santander
+  - key: cafe
+    label: Café
+    base_yield: 1.2
+    window: marzo – abril
+    regions:
+      - Santander
+  - key: granadilla
+    label: Granadilla
+    base_yield: 9.5
+    window: septiembre – octubre
+    regions:
+      - Santander
+
+# Cobertura geográfica
+region:
+  department: Santander
+  country: Colombia
+
+# APIs externas
+apis:
+  climate:
+    provider: Open-Meteo
+    url: https://api.open-meteo.com/v1
+    cost: free
+  soil:
+    provider: SoilGrids (ISRIC)
+    url: https://rest.isric.org/soilgrids/v2.0
+    cost: free
+  llm:
+    provider: Groq (Llama 3.1 8B)
+    model: llama-3.1-8b-instant
+    cost: free
+
+# Configuración de modelos
+models:
+  prediction:
+    type: rule_based_with_api_data
+    version: "2.0"
+    confidence_threshold: 0.7
+  risk_classification:
+    type: heuristic
+    version: "2.0"

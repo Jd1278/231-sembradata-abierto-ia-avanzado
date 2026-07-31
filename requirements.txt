@@ -1,0 +1,5 @@
+# Frontend dependencies (managed via package.json with bun)
+# This file exists for compatibility with the repository structure standard.
+# Use: bun install
+
+

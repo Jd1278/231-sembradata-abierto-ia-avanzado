@@ -1,0 +1,541 @@
+﻿openapi: "3.1.0"
+info:
+  title: SembraData API
+  description: >
+    API REST para la plataforma SembraData de prediccion agroclimatica para
+    Colombia. Expuesta via Supabase PostgREST.
+  version: "0.5.0"
+  contact:
+    name: SembraData
+    url: https://github.com/sembradata
+  license:
+    name: MIT
+
+servers:
+  - url: https://hhnbaxwbeywyriigcwav.supabase.co/rest/v1
+    description: Supabase REST API
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+paths:
+  /municipios:
+    get:
+      operationId: getMunicipios
+      summary: Lista de municipios de Colombia
+      description: >
+        Obtiene la lista de municipios de Colombia con su informacion
+        geografica y zona agroecologica.
+      tags:
+        - Geografia
+      responses:
+        "200":
+          description: Lista de municipios
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Municipio"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /clima_mensual:
+    get:
+      operationId: getClimaMensual
+      summary: Datos climaticos mensuales
+      description: >
+        Obtiene datos climaticos mensuales filtrados por municipio, anio y mes.
+      tags:
+        - Clima
+      parameters:
+        - $ref: "#/components/parameters/MunicipioId"
+        - name: anio
+          in: query
+          required: true
+          description: Anio del registro climatico
+          schema:
+            type: integer
+            example: 2026
+        - name: mes
+          in: query
+          required: true
+          description: Mes del registro (1-12)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+            example: 3
+      responses:
+        "200":
+          description: Datos climaticos mensuales
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClimaMensual"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /rendimiento_historico:
+    get:
+      operationId: getRendimientoHistorico
+      summary: Rendimiento historico por municipio y cultivo
+      description: >
+        Obtiene el rendimiento historico de un cultivo en un municipio,
+        con filtros de rango de anios.
+      tags:
+        - Rendimiento
+      parameters:
+        - $ref: "#/components/parameters/MunicipioId"
+        - name: cultivo_id
+          in: query
+          required: true
+          description: ID del cultivo
+          schema:
+            type: string
+            format: uuid
+        - name: anio_gte
+          in: query
+          required: false
+          description: Anio minimo del rango
+          schema:
+            type: integer
+            example: 2018
+        - name: anio_lte
+          in: query
+          required: false
+          description: Anio maximo del rango
+          schema:
+            type: integer
+            example: 2026
+      responses:
+        "200":
+          description: Rendimiento historico
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RendimientoHistorico"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /riesgo_agroclimatico:
+    get:
+      operationId: getRiesgoAgroclimatico
+      summary: Nivel de riesgo agroclimatico
+      description: >
+        Obtiene el nivel de riesgo agroclimatico para un municipio, cultivo,
+        anio y mes especificos.
+      tags:
+        - Riesgo
+      parameters:
+        - $ref: "#/components/parameters/MunicipioId"
+        - name: cultivo_id
+          in: query
+          required: true
+          description: ID del cultivo
+          schema:
+            type: string
+            format: uuid
+        - name: anio
+          in: query
+          required: true
+          description: Anio del registro
+          schema:
+            type: integer
+            example: 2026
+        - name: mes
+          in: query
+          required: true
+          description: Mes del registro (1-12)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+            example: 3
+      responses:
+        "200":
+          description: Riesgo agroclimatico
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RiesgoAgroclimatico"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /predicciones:
+    get:
+      operationId: getPredicciones
+      summary: Predicciones de rendimiento futuro
+      description: >
+        Obtiene predicciones de rendimiento futuro para un municipio y cultivo.
+      tags:
+        - Predicciones
+      parameters:
+        - $ref: "#/components/parameters/MunicipioId"
+        - name: cultivo_id
+          in: query
+          required: true
+          description: ID del cultivo
+          schema:
+            type: string
+            format: uuid
+        - name: anio_gte
+          in: query
+          required: false
+          description: Anio minimo del rango de prediccion
+          schema:
+            type: integer
+            example: 2026
+      responses:
+        "200":
+          description: Lista de predicciones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Prediccion"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /cultivos:
+    get:
+      operationId: getCultivos
+      summary: Lista de cultivos disponibles
+      description: >
+        Obtiene la lista de cultivos disponibles con su informacion
+        de rendimiento base, ventana de siembra y descripcion.
+      tags:
+        - Cultivos
+      responses:
+        "200":
+          description: Lista de cultivos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Cultivo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        Token de autenticacion de Supabase (SUPABASE_ANON_KEY).
+        Usar el mismo valor que la clave anon.
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: apikey
+      description: Clave anonima de Supabase (SUPABASE_ANON_KEY).
+
+  parameters:
+    MunicipioId:
+      name: municipio_id
+      in: query
+      required: true
+      description: ID UUID del municipio
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Unauthorized:
+      description: Credenciales invalidas o ausentes
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    Municipio:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador unico del municipio
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        nombre:
+          type: string
+          description: Nombre del municipio
+          example: "Bucaramanga"
+        departamento:
+          type: string
+          description: Departamento al que pertenece
+          example: "Santander"
+        latitud:
+          type: number
+          format: double
+          description: Latitud en grados decimales
+          example: 7.125
+        longitud:
+          type: number
+          format: double
+          description: Longitud en grados decimales
+          example: -73.125
+        altitud_msnm:
+          type: integer
+          description: Altitud en metros sobre el nivel del mar
+          example: 959
+        area_km2:
+          type: number
+          format: double
+          description: Area en kilometros cuadrados
+          example: 165
+        poblacion:
+          type: integer
+          description: Poblacion estimada
+          example: 581130
+        zone_agroecologica:
+          type: string
+          description: Zona agroecologica
+          example: "alta"
+          enum:
+            - alta
+            - media
+            - baja
+      required:
+        - id
+        - nombre
+        - departamento
+        - latitud
+        - longitud
+
+    ClimaMensual:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        municipio_id:
+          type: string
+          format: uuid
+        anio:
+          type: integer
+          description: Anio del registro
+          example: 2026
+        mes:
+          type: integer
+          description: Mes del registro (1-12)
+          example: 3
+        precipitacion_mm:
+          type: number
+          format: double
+          description: Precipitacion total en milimetros
+          example: 120.5
+        temperatura_max:
+          type: number
+          format: double
+          description: Temperatura maxima promedio en C
+          example: 28.3
+        temperatura_min:
+          type: number
+          format: double
+          description: Temperatura minima promedio en C
+          example: 18.1
+        humedad_relativa:
+          type: number
+          format: double
+          description: Humedad relativa promedio en porcentaje
+          example: 75.0
+        velocidad_viento:
+          type: number
+          format: double
+          description: Velocidad promedio del viento en m/s
+          example: 2.5
+        radiacion_solar:
+          type: number
+          format: double
+          description: Radiacion solar promedio en MJ/m2
+          example: 18.2
+      required:
+        - id
+        - municipio_id
+        - anio
+        - mes
+
+    RendimientoHistorico:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        municipio_id:
+          type: string
+          format: uuid
+        cultivo_id:
+          type: string
+          format: uuid
+        anio:
+          type: integer
+          description: Anio del registro
+          example: 2024
+        rendimiento_ton_ha:
+          type: number
+          format: double
+          description: Rendimiento en toneladas por hectarea
+          example: 1.25
+        fuente:
+          type: string
+          description: Fuente de los datos
+          example: "DANE"
+      required:
+        - id
+        - municipio_id
+        - cultivo_id
+        - anio
+        - rendimiento_ton_ha
+
+    RiesgoAgroclimatico:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        municipio_id:
+          type: string
+          format: uuid
+        cultivo_id:
+          type: string
+          format: uuid
+        anio:
+          type: integer
+          description: Anio del registro
+          example: 2026
+        mes:
+          type: integer
+          description: Mes del registro (1-12)
+          example: 3
+        nivel:
+          type: string
+          description: Nivel de riesgo
+          example: "Medio"
+          enum:
+            - Bajo
+            - Medio
+            - Alto
+        score:
+          type: number
+          format: double
+          description: Puntuacion numerica de riesgo (0-100)
+          example: 55.0
+        factores:
+          type: object
+          description: Factores que contribuyen al riesgo
+          additionalProperties:
+            type: number
+            format: double
+          example:
+            sequia: 0.3
+            helada: 0.1
+            plaga: 0.4
+      required:
+        - id
+        - municipio_id
+        - cultivo_id
+        - anio
+        - mes
+        - nivel
+
+    Prediccion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        municipio_id:
+          type: string
+          format: uuid
+        cultivo_id:
+          type: string
+          format: uuid
+        anio:
+          type: integer
+          description: Anio de la prediccion
+          example: 2027
+        mes:
+          type: integer
+          description: Mes de la prediccion (1-12)
+          example: 6
+        rendimiento_predicho:
+          type: number
+          format: double
+          description: Rendimiento predicho en toneladas por hectarea
+          example: 1.35
+        confianza:
+          type: number
+          format: double
+          description: Nivel de confianza de la prediccion (0-1)
+          example: 0.82
+        modelo:
+          type: string
+          description: Modelo utilizado para la prediccion
+          example: "ensemble_v2"
+      required:
+        - id
+        - municipio_id
+        - cultivo_id
+        - anio
+        - mes
+        - rendimiento_predicho
+
+    Cultivo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador unico del cultivo
+          example: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        nombre:
+          type: string
+          description: Nombre del cultivo
+          example: "Cacao"
+        clave:
+          type: string
+          description: Clave interna del cultivo
+          example: "cacao"
+        rendimiento_base:
+          type: number
+          format: double
+          description: Rendimiento base en toneladas por hectarea
+          example: 0.85
+        ventana_siembra:
+          type: string
+          description: Ventana optima de siembra
+          example: "abril - mayo"
+        descripcion:
+          type: string
+          description: Descripcion del cultivo
+          example: "Cultivo insignia de Colombia"
+      required:
+        - id
+        - nombre
+        - clave
+        - rendimiento_base
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Mensaje de error
+          example: "Invalid API key"
+        code:
+          type: string
+          description: Codigo de error
+          example: "PGRST301"
+      required:
+        - message

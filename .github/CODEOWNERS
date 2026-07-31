@@ -1,0 +1,40 @@
+# SembraData - Code Owners
+# Asignacion de responsables por modulo del proyecto
+
+# Infraestructura y CI/CD
+.github/ @sembra-data/team
+deployments/ @sembra-data/team
+
+# Documentacion
+docs/ @sembra-data/team
+README.md @sembra-data/team
+LICENSE @sembra-data/team
+
+# Pipeline de datos
+data/ @sembra-data/data-engineers
+src/data_pipeline/ @sembra-data/data-engineers
+src/features/ @sembra-data/data-engineers
+
+# Modelos y ML
+models/ @sembra-data/ml-engineers
+src/inference.ts @sembra-data/ml-engineers
+src/train.ts @sembra-data/ml-engineers
+
+# Agentes IA
+src/agents/ @sembra-data/ai-engineers
+
+# Servicios backend
+src/services/ @sembra-data/backend-team
+supabase/ @sembra-data/backend-team
+
+# Frontend y UI
+src/components/ @sembra-data/frontend-team
+src/routes/ @sembra-data/frontend-team
+src/styles.css @sembra-data/frontend-team
+
+# Configuracion
+config/ @sembra-data/team
+
+# Tests
+tests/ @sembra-data/qa-team
+e2e/ @sembra-data/qa-team
