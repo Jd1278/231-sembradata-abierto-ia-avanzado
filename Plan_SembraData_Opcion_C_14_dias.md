@@ -1756,3 +1756,21 @@ No se recomienda una reescritura completa durante esta etapa.
 **Primero confiabilidad, después escalabilidad y finalmente presentación.**
 
 El objetivo no es solamente que SembraData "se vea mejor", sino que los resultados presentados al usuario puedan ser explicados, reproducidos y defendidos técnicamente.
+
+---
+
+# 23. Progreso de ejecución
+
+| Fase                                              | Commits     | Estado |
+| ------------------------------------------------- | ----------- | ------ |
+| Fase 0 — Issues funcionales (ISSUE-01 a ISSUE-07) | `b3d4486`   | ✅     |
+| Fase 1 — Fundación y CI/CD                        | `61c3ab5`   | ✅     |
+| Fase 2 — Filtros funcionales                      | `7ea1c10`   | ✅     |
+| Fase 3 — Gráficas y rendimiento                   | `d31f1a2`   | ✅     |
+| Fase 4 — IA y API Layer                           | `139494a`   | ✅     |
+| Fase 5 — UX                                       | `9a08b4b`   | ✅     |
+| Fase 6 — Testing y Docs                           | `pendiente` | 🔄     |
+| Fase 7 — Release final                            | `pendiente` | ⏳     |
+
+**Tests:** 158/159 (1 fallo pre-existente: Supabase credentials)
+**Bun:** 1.3.14 instalado, CI/CD usa `bun install --frozen-lockfile`
