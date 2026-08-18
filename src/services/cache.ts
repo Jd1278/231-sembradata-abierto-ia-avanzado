@@ -195,3 +195,49 @@ export async function setCachedCommodity<T>(symbol: string, payload: T): Promise
     // Cache write failure is non-critical
   }
 }
+
+// ============================================================
+// Cache Cleanup
+// ============================================================
+
+export async function clearExpiredCache(): Promise<{ cleaned: number }> {
+  if (!isSupabaseConfigured()) return { cleaned: 0 };
+
+  let cleaned = 0;
+  const now = Date.now();
+
+  try {
+    const ideamCutoff = new Date(now - CACHE_TTL.ideam).toISOString();
+    const { count: ideamCount } = await supabase
+      .from("ideam_cache")
+      .delete()
+      .lt("fetched_at", ideamCutoff);
+    cleaned += ideamCount ?? 0;
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const nasaCutoff = new Date(now - CACHE_TTL.nasa_power).toISOString();
+    const { count: nasaCount } = await supabase
+      .from("nasa_power_cache")
+      .delete()
+      .lt("fetched_at", nasaCutoff);
+    cleaned += nasaCount ?? 0;
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const commodityCutoff = new Date(now - CACHE_TTL.commodity).toISOString();
+    const { count: commodityCount } = await supabase
+      .from("commodity_cache")
+      .delete()
+      .lt("fetched_at", commodityCutoff);
+    cleaned += commodityCount ?? 0;
+  } catch {
+    /* ignore */
+  }
+
+  return { cleaned };
+}

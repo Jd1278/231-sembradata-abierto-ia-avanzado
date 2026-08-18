@@ -136,7 +136,14 @@ function saveAnalysisLocal(
 function getAnalysisHistoryLocal(): AnalysisRecord[] {
   try {
     const raw = localStorage.getItem(LOCAL_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const records: AnalysisRecord[] = JSON.parse(raw);
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const fresh = records.filter((r) => new Date(r.created_at).getTime() > thirtyDaysAgo);
+    if (fresh.length < records.length) {
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(fresh));
+    }
+    return fresh;
   } catch {
     return [];
   }

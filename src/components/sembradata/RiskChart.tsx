@@ -34,17 +34,32 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
         const avgTemp =
           monthData.reduce((s, d) => s + (d.tempMax + d.tempMin) / 2, 0) / monthData.length;
         const avgHum = monthData.reduce((s, d) => s + d.humidity, 0) / monthData.length;
+        const avgWind = monthData.reduce((s, d) => s + d.windSpeed, 0) / monthData.length;
 
         const droughtRisk = Math.round(
-          Math.min(100, Math.max(5, (1 - avgPrecip / 60) * 50 + (avgTemp > 28 ? 20 : 0))),
+          Math.min(
+            100,
+            Math.max(
+              5,
+              (1 - avgPrecip / 60) * 40 +
+                (avgTemp > 28 ? 20 : avgTemp > 25 ? 10 : 0) +
+                (avgWind > 15 ? 10 : 0),
+            ),
+          ),
         );
         const frostRisk = Math.round(
-          Math.min(100, Math.max(2, avgTemp < 10 ? 60 : avgTemp < 15 ? 30 : 5)),
+          Math.min(100, Math.max(2, avgTemp < 5 ? 70 : avgTemp < 10 ? 45 : avgTemp < 15 ? 15 : 3)),
         );
         const pestRisk = Math.round(
           Math.min(
             100,
-            Math.max(10, (avgHum > 75 ? 40 : 0) + (avgTemp > 22 && avgTemp < 28 ? 20 : 0)),
+            Math.max(
+              5,
+              (avgHum > 85 ? 35 : avgHum > 75 ? 25 : avgHum > 65 ? 12 : 0) +
+                (avgTemp >= 20 && avgTemp <= 28 ? 20 : avgTemp >= 15 && avgTemp <= 30 ? 10 : 0) +
+                (avgPrecip > 80 ? 15 : avgPrecip > 50 ? 8 : 0) +
+                (avgWind > 20 ? 10 : 0),
+            ),
           ),
         );
 

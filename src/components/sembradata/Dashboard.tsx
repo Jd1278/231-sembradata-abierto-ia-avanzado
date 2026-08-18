@@ -26,7 +26,6 @@ import { RiskChart } from "./RiskChart";
 import { MUNICIPIOS, CROP_DATA, computeAltitude } from "./data";
 import type { CropKey } from "@/types/crops";
 import { OfflineIndicator } from "./OfflineIndicator";
-import { HistoryPanel } from "./HistoryPanel";
 import { AdvancedFilters, type AdvancedFilterValues } from "./AdvancedFilters";
 import { FilterBlock } from "./dashboard/FilterBlock";
 import { KpiCard } from "./dashboard/KpiCard";
@@ -238,9 +237,7 @@ export function Dashboard() {
             })}
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <HistoryPanel />
-          </div>
+          <div className="flex items-center gap-1.5"></div>
         </div>
       </header>
 
@@ -344,10 +341,30 @@ export function Dashboard() {
                 <p className="text-xs font-medium uppercase tracking-wider text-primary">
                   Recomendación
                 </p>
-                <p className="mt-2 text-sm leading-relaxed text-foreground">
-                  Ventana óptima de siembra para <b>{cropInfo.label}</b>{" "}
-                  {muni ? `en ${muni.name}` : ""}: <b>{cropInfo.window}</b>.
-                </p>
+                {realtime.viability ? (
+                  <p className="mt-2 text-sm leading-relaxed text-foreground">
+                    {realtime.viability.score >= 70 ? (
+                      <>
+                        Condiciones favorables para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>.
+                        Ventana óptima de siembra: <b>{cropInfo.window}</b>.
+                      </>
+                    ) : realtime.viability.score >= 50 ? (
+                      <>
+                        Riesgo moderado para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>. Revise
+                        los factores antes de sembrar.
+                      </>
+                    ) : (
+                      <>
+                        Alto riesgo para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>. Considere
+                        cultivos alternativos.
+                      </>
+                    )}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    Seleccione un municipio y cultivo para ver recomendaciones.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </aside>
@@ -439,6 +456,16 @@ export function Dashboard() {
                           santanderMunis[0]?.name ??
                           "",
                       );
+                      setCrop("cacao");
+                      setYear(new Date().getFullYear().toString());
+                      setMonth(MONTH_LABELS[new Date().getMonth()]);
+                      setFilters({
+                        altitudeRange: [0, 4000],
+                        tempRange: [10, 35],
+                        precipRange: [0, 4000],
+                        soilType: "all",
+                      });
+                      setShowPrediction(false);
                     }}
                   >
                     Limpiar
@@ -447,7 +474,9 @@ export function Dashboard() {
                     variant="outline"
                     size="sm"
                     className="rounded-xl text-xs"
-                    onClick={() => setShowPrediction(true)}
+                    onClick={() => {
+                      if (muni) setShowPrediction(true);
+                    }}
                   >
                     Analizar zona
                   </Button>
