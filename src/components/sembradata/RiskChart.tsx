@@ -104,7 +104,13 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
             tickLine={false}
             axisLine={false}
           />
-          <YAxis stroke="var(--muted-foreground)" fontSize={10} tickLine={false} axisLine={false} />
+          <YAxis
+            stroke="var(--muted-foreground)"
+            fontSize={10}
+            tickLine={false}
+            axisLine={false}
+            domain={[0, 100]}
+          />
           <Tooltip
             contentStyle={{
               background: "var(--popover)",
