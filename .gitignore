@@ -16,6 +16,9 @@ dist-ssr
 .nitro
 *.local
 
+# Lockfile — project uses Bun, ignore npm lockfile
+package-lock.json
+
 # Vercel build output (NITRO_PRESET=vercel)
 .vercel/
 
