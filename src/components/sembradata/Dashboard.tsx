@@ -23,7 +23,13 @@ import { cn } from "@/lib/utils";
 import { SantanderMap } from "./SantanderMap";
 import { YieldChart } from "./YieldChart";
 import { RiskChart } from "./RiskChart";
-import { MUNICIPIOS, CROP_DATA, computeAltitude } from "./data";
+import {
+  MUNICIPIOS,
+  CROP_DATA,
+  computeAltitude,
+  estimateTemperature,
+  estimatePrecipitation,
+} from "./data";
 import type { CropKey } from "@/types/crops";
 import { OfflineIndicator } from "./OfflineIndicator";
 import { AdvancedFilters, type AdvancedFilterValues } from "./AdvancedFilters";
@@ -95,9 +101,28 @@ export function Dashboard() {
   const filteredMunicipios = useMemo(() => {
     return santanderMunis.filter((m) => {
       const alt = computeAltitude(m.factor);
-      return alt >= filters.altitudeRange[0] && alt <= filters.altitudeRange[1];
+      if (alt < filters.altitudeRange[0] || alt > filters.altitudeRange[1]) return false;
+
+      const estTemp = estimateTemperature(alt);
+      if (estTemp < filters.tempRange[0] || estTemp > filters.tempRange[1]) return false;
+
+      const estPrecip = estimatePrecipitation(alt);
+      if (estPrecip < filters.precipRange[0] || estPrecip > filters.precipRange[1]) return false;
+
+      if (filters.soilType !== "all") {
+        const soilByAlt =
+          alt < 800 ? "arcilla" : alt < 1500 ? "franco" : alt < 2200 ? "limo" : "arena";
+        if (soilByAlt !== filters.soilType) return false;
+      }
+
+      return true;
     });
   }, [filters]);
+
+  const filteredNames = useMemo(
+    () => new Set(filteredMunicipios.map((m) => m.name)),
+    [filteredMunicipios],
+  );
 
   const cropInfo = CROP_DATA[crop];
   const muni = useMemo(
@@ -442,6 +467,11 @@ export function Dashboard() {
                   </CardTitle>
                   <p className="text-xs text-muted-foreground">
                     Riesgo agroclimático para {cropInfo.label} · {month} {year}
+                    {filteredMunicipios.length < santanderMunis.length && (
+                      <span className="ml-2 text-primary font-medium">
+                        {filteredMunicipios.length} de {santanderMunis.length} municipios
+                      </span>
+                    )}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -495,6 +525,7 @@ export function Dashboard() {
                         }
                       : undefined
                   }
+                  filteredNames={filteredNames}
                 />
               </CardContent>
             </Card>

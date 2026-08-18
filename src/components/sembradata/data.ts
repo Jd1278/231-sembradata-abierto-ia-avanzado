@@ -53,6 +53,15 @@ export function computeAltitude(factor: number | undefined): number {
   return factor ? Math.round(500 + (factor - 0.72) * 2500) : 500;
 }
 
+export function estimateTemperature(altitude: number): number {
+  return Math.round((28 - (altitude / 1000) * 6.5) * 10) / 10;
+}
+
+export function estimatePrecipitation(altitude: number): number {
+  const base = 2200 - altitude * 0.3;
+  return Math.round(Math.max(800, Math.min(3500, base)));
+}
+
 export function mapSupabaseMunicipio(m: MunicipioDB): Municipio {
   const factor = m.altitud_msnm ? 0.72 + Math.min(m.altitud_msnm / 3000, 0.5) : 1.0;
   const seed = m.nombre.split("").reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0);

@@ -27,6 +27,7 @@ interface Props {
   selected: string;
   onSelect: (name: string) => void;
   dynamicRisk?: { level: Risk; score: number };
+  filteredNames?: Set<string>;
 }
 
 export const SantanderMap = memo(function SantanderMap({
@@ -34,6 +35,7 @@ export const SantanderMap = memo(function SantanderMap({
   selected,
   onSelect,
   dynamicRisk,
+  filteredNames,
 }: Props) {
   const [hover, setHover] = useState<string | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
@@ -147,6 +149,7 @@ export const SantanderMap = memo(function SantanderMap({
               const isSelected = m.name === selected;
               const isHover = m.id === hover;
               const isFocused = idx === focusedIdx;
+              const isFiltered = !filteredNames || filteredNames.has(m.name);
               return (
                 <path
                   key={m.id}
@@ -158,7 +161,7 @@ export const SantanderMap = memo(function SantanderMap({
                     RISK_FILL[risk],
                     "cursor-pointer stroke-background transition-all duration-200 ease-out",
                     "hover:[filter:brightness(1.1)]",
-                    isHover || isFocused ? "opacity-100" : "opacity-85",
+                    isHover || isFocused ? "opacity-100" : isFiltered ? "opacity-85" : "opacity-20",
                   )}
                   strokeWidth={isSelected ? 1.4 : isFocused ? 1.2 : 0.6}
                   stroke={isSelected || isFocused ? "currentColor" : undefined}
