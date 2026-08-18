@@ -86,8 +86,8 @@ export function ChatbotPanel({ municipio, crop }: { municipio?: string; crop?: s
     ]);
   }
 
-  async function send() {
-    const q = input.trim();
+  async function send(question?: string) {
+    const q = (question ?? input).trim();
     if (!q || loading) return;
     setInput("");
     setMessages((m) => [...m, { id: Date.now(), role: "user", text: q }]);
@@ -98,6 +98,10 @@ export function ChatbotPanel({ municipio, crop }: { municipio?: string; crop?: s
         headers: CHAT_HEADERS,
         body: JSON.stringify({ message: q, sessionId }),
       });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.error ?? `HTTP ${res.status}`);
+      }
       const data = await res.json();
       setMessages((m) => [
         ...m,
@@ -110,15 +114,14 @@ export function ChatbotPanel({ municipio, crop }: { municipio?: string; crop?: s
             : undefined,
         },
       ]);
-    } catch {
+    } catch (err) {
+      const msg =
+        err instanceof Error && err.message.includes("Failed to fetch")
+          ? "No se pudo conectar con el servidor. Verifica tu conexión."
+          : "Ocurrió un error al procesar tu consulta. Por favor, intenta de nuevo.";
       setMessages((m) => [
         ...m,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          text: "Ocurrió un error al procesar tu consulta. Por favor, intenta de nuevo.",
-          source: "error",
-        },
+        { id: Date.now() + 1, role: "assistant", text: msg, source: "error" },
       ]);
     } finally {
       setLoading(false);
@@ -233,47 +236,7 @@ export function ChatbotPanel({ municipio, crop }: { municipio?: string; crop?: s
                 {suggestions.map((s) => (
                   <button
                     key={s}
-                    onClick={async () => {
-                      setInput(s);
-                      await new Promise((r) => setTimeout(r, 50));
-                      setMessages((prev) => [...prev, { id: Date.now(), role: "user", text: s }]);
-                      setLoading(true);
-                      try {
-                        const res = await fetch(CHAT_ENDPOINT, {
-                          method: "POST",
-                          headers: CHAT_HEADERS,
-                          body: JSON.stringify({ message: s, sessionId }),
-                        });
-                        const data = await res.json();
-                        setMessages((prev) => [
-                          ...prev,
-                          {
-                            id: Date.now() + 1,
-                            role: "assistant",
-                            text: data.reply,
-                            metadata: data.data
-                              ? {
-                                  municipio: data.data.municipio,
-                                  sources: data.data.sources,
-                                  intent: data.intent,
-                                }
-                              : undefined,
-                          },
-                        ]);
-                      } catch {
-                        setMessages((prev) => [
-                          ...prev,
-                          {
-                            id: Date.now() + 1,
-                            role: "assistant",
-                            text: "Ocurrió un error al procesar tu consulta.",
-                            source: "error",
-                          },
-                        ]);
-                      } finally {
-                        setLoading(false);
-                      }
-                    }}
+                    onClick={() => send(s)}
                     className="rounded-lg border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground transition hover:border-primary/30 hover:text-foreground"
                   >
                     {s}

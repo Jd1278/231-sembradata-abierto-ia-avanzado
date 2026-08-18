@@ -46,7 +46,38 @@ export interface AgriculturalIndices {
 }
 
 const BASE_URL = "https://api.open-meteo.com/v1";
+const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
 const FETCH_TIMEOUT_MS = 15000;
+const MAX_RETRIES = 2;
+
+const responseCache = new Map<string, { data: unknown; at: number }>();
+const CACHE_TTL_MS = 10 * 60 * 1000;
+
+function cacheKey(url: string): string {
+  return url;
+}
+
+function getCached<T>(url: string): T | null {
+  const entry = responseCache.get(cacheKey(url));
+  if (!entry) return null;
+  if (Date.now() - entry.at > CACHE_TTL_MS) {
+    responseCache.delete(cacheKey(url));
+    return null;
+  }
+  return entry.data as T;
+}
+
+function setCache(url: string, data: unknown): void {
+  if (responseCache.size > 200) {
+    const oldest = responseCache.keys().next().value;
+    if (oldest) responseCache.delete(oldest);
+  }
+  responseCache.set(cacheKey(url), { data, at: Date.now() });
+}
+
+export function clearClimateCache(): void {
+  responseCache.clear();
+}
 
 async function fetchWithTimeout(url: string, options?: RequestInit): Promise<Response> {
   const controller = new AbortController();
@@ -58,7 +89,27 @@ async function fetchWithTimeout(url: string, options?: RequestInit): Promise<Res
     clearTimeout(timeout);
   }
 }
-const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
+
+async function fetchWithRetry(url: string, options?: RequestInit): Promise<Response> {
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url, options);
+      if (res.ok) return res;
+      if (res.status >= 500 && attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      }
+    }
+  }
+  throw lastError ?? new Error("Fetch failed after retries");
+}
 
 const DAILY_FIELDS = [
   "temperature_2m_max",
@@ -161,11 +212,19 @@ export async function fetchCurrentClimate(
     past_days: String(pastDays),
   });
 
-  const res = await fetchWithTimeout(`${BASE_URL}/forecast?${params}`);
-  if (!res.ok) throw new Error(`Climate API error: ${res.status}`);
-  const data = await res.json();
-  const current = data.current;
-  const dailyData = mapDailyData(data.daily);
+  const url = `${BASE_URL}/forecast?${params}`;
+  let data: Record<string, unknown>;
+  const cached = getCached<Record<string, unknown>>(url);
+  if (cached) {
+    data = cached;
+  } else {
+    const res = await fetchWithRetry(url);
+    if (!res.ok) throw new Error(`Climate API error: ${res.status}`);
+    data = (await res.json()) as Record<string, unknown>;
+    setCache(url, data);
+  }
+  const current = data.current as Record<string, number>;
+  const dailyData = mapDailyData(data.daily as Parameters<typeof mapDailyData>[0]);
 
   let tempSum = 0,
     precipSum = 0,
@@ -222,10 +281,18 @@ export async function fetchHistoricalClimate(
     timezone: "America/Bogota",
   });
 
-  const res = await fetchWithTimeout(`${ARCHIVE_URL}?${params}`);
-  if (!res.ok) throw new Error(`Historical climate API error: ${res.status}`);
-  const data = await res.json();
-  const dailyData = mapDailyData(data.daily);
+  const url = `${ARCHIVE_URL}?${params}`;
+  let data: Record<string, unknown>;
+  const cached = getCached<Record<string, unknown>>(url);
+  if (cached) {
+    data = cached;
+  } else {
+    const res = await fetchWithRetry(url);
+    if (!res.ok) throw new Error(`Historical climate API error: ${res.status}`);
+    data = (await res.json()) as Record<string, unknown>;
+    setCache(url, data);
+  }
+  const dailyData = mapDailyData(data.daily as Parameters<typeof mapDailyData>[0]);
 
   let tempSum = 0,
     precipSum = 0,
@@ -283,10 +350,18 @@ export async function fetchRecentHistory(lat: number, lng: number): Promise<Hist
     forecast_days: "0",
   });
 
-  const res = await fetchWithTimeout(`${BASE_URL}/forecast?${params}`);
-  if (!res.ok) throw new Error(`Climate API error: ${res.status}`);
-  const data = await res.json();
-  const dailyData = mapDailyData(data.daily);
+  const url = `${BASE_URL}/forecast?${params}`;
+  let data: Record<string, unknown>;
+  const cached = getCached<Record<string, unknown>>(url);
+  if (cached) {
+    data = cached;
+  } else {
+    const res = await fetchWithRetry(url);
+    if (!res.ok) throw new Error(`Climate API error: ${res.status}`);
+    data = (await res.json()) as Record<string, unknown>;
+    setCache(url, data);
+  }
+  const dailyData = mapDailyData(data.daily as Parameters<typeof mapDailyData>[0]);
 
   let tempSum = 0,
     precipSum = 0,

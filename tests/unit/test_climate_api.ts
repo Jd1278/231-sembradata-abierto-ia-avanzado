@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fetchCurrentClimate, fetchHistoricalClimate } from "../../src/services/climate-api";
+import {
+  fetchCurrentClimate,
+  fetchHistoricalClimate,
+  clearClimateCache,
+} from "../../src/services/climate-api";
 
 const rawDailyData = {
   time: ["2024-01-01", "2024-01-02", "2024-01-03"],
@@ -33,6 +37,7 @@ const mockHistoricalApiResponse = {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  clearClimateCache();
 });
 
 describe("fetchCurrentClimate", () => {
