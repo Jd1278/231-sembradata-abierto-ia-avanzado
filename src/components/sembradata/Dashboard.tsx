@@ -542,11 +542,15 @@ export function Dashboard() {
                   </p>
                 </CardHeader>
                 <CardContent>
-                  <YieldChart
-                    crop={crop}
-                    factor={muni?.factor ?? 1}
-                    viabilityScore={realtime.viability?.score ?? 50}
-                  />
+                  <Suspense
+                    fallback={<div className="h-[280px] animate-pulse rounded-2xl bg-muted" />}
+                  >
+                    <YieldChart
+                      crop={crop}
+                      factor={muni?.factor ?? 1}
+                      viabilityScore={realtime.viability?.score ?? 50}
+                    />
+                  </Suspense>
                 </CardContent>
               </Card>
 
@@ -558,11 +562,15 @@ export function Dashboard() {
                   <p className="text-xs text-muted-foreground">Sequía, heladas y plagas</p>
                 </CardHeader>
                 <CardContent>
-                  <RiskChart
-                    factor={muni?.factor ?? 1}
-                    climate={realtime.climate}
-                    viability={realtime.viability}
-                  />
+                  <Suspense
+                    fallback={<div className="h-[280px] animate-pulse rounded-2xl bg-muted" />}
+                  >
+                    <RiskChart
+                      factor={muni?.factor ?? 1}
+                      climate={realtime.climate}
+                      viability={realtime.viability}
+                    />
+                  </Suspense>
                 </CardContent>
               </Card>
 
