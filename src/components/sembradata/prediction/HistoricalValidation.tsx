@@ -90,12 +90,12 @@ export function HistoricalValidation({ lat, lng, forecastTemps, forecastPrecip, 
             Validación Histórica (NASA POWER)
           </CardTitle>
           {isStale && (
-            <Badge variant="secondary" className="text-[9px]">
+            <Badge variant="secondary" className="text-sm">
               Datos guardados
             </Badge>
           )}
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Comparación pronóstico vs últimos 30 días reales
         </p>
       </CardHeader>
@@ -126,7 +126,7 @@ export function HistoricalValidation({ lat, lng, forecastTemps, forecastPrecip, 
 
         {Math.abs(tempMaxDiff) > 3 && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 dark:border-amber-800 dark:bg-amber-950">
-            <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
               {tempMaxDiff > 0
                 ? "El pronóstico indica temperaturas más altas de lo histórico."
                 : "El pronóstico indica temperaturas más bajas de lo histórico."}
@@ -134,7 +134,7 @@ export function HistoricalValidation({ lat, lng, forecastTemps, forecastPrecip, 
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Fuente: NASA POWER (datos satelitales diarios) · {historical.length} días analizados
         </p>
       </CardContent>
@@ -165,19 +165,19 @@ function CompareMetric({
       : "text-muted-foreground";
 
   return (
-    <div className="rounded-xl border border-border p-2.5">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-bold text-foreground">{forecast}</p>
-      <p className="text-xs text-muted-foreground">Hist: {historical}</p>
+    <div className="rounded-xl border border-border p-3">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="mt-1 text-lg font-bold text-foreground">{forecast}</p>
+      <p className="text-sm text-muted-foreground">Hist: {historical}</p>
       {diff !== null ? (
-        <p className={`mt-0.5 text-xs font-medium ${diffColor}`}>
+        <p className={`mt-0.5 text-sm font-medium ${diffColor}`}>
           {diff > 0 ? "+" : ""}
           {diff.toFixed(1)}
           {unit}
         </p>
       ) : (
         ratio && (
-          <p className="mt-0.5 text-xs font-medium text-muted-foreground">{ratio}% histórico</p>
+          <p className="mt-0.5 text-sm font-medium text-muted-foreground">{ratio}% histórico</p>
         )
       )}
     </div>

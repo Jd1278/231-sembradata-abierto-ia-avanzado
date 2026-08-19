@@ -10,8 +10,8 @@ interface Props {
 }
 
 const W = 600;
-const H = 480;
-const PAD = { top: 16, right: 16, bottom: 36, left: 44 };
+const H = 520;
+const PAD = { top: 20, right: 20, bottom: 44, left: 52 };
 const PW = W - PAD.left - PAD.right;
 const PH = H - PAD.top - PAD.bottom;
 const SERIES = ["Sequía", "Heladas", "Plagas"] as const;
@@ -137,9 +137,9 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
               />
               <text
                 x={PAD.left - 6}
-                y={y + 4}
+                y={y + 5}
                 textAnchor="end"
-                fontSize={13}
+                fontSize={16}
                 fill="var(--muted-foreground)"
               >
                 {v}
@@ -154,9 +154,9 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
             <text
               key={i}
               x={groupX}
-              y={H - 6}
+              y={H - 8}
               textAnchor="middle"
-              fontSize={12}
+              fontSize={15}
               fill="var(--muted-foreground)"
             >
               {d.mes.slice(0, 3)}
@@ -221,12 +221,12 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
             <rect
               x={
                 hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 115 > W
-                  ? hoverIdx * barGroupW + PAD.left - 118
+                  ? hoverIdx * barGroupW + PAD.left - 130
                   : hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 2
               }
-              y={PAD.top - 2}
-              width={110}
-              height={56}
+              y={PAD.top - 4}
+              width={125}
+              height={65}
               rx={8}
               fill="var(--popover)"
               stroke="var(--border)"
@@ -239,7 +239,7 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
                   : hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 8
               }
               y={PAD.top + 12}
-              fontSize={13}
+              fontSize={16}
               fill="var(--foreground)"
               fontWeight={600}
             >
@@ -253,18 +253,18 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
                       ? hoverIdx * barGroupW + PAD.left - 108
                       : hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 12
                   }
-                  cy={PAD.top + 24 + j * 13}
-                  r={3}
+                  cy={PAD.top + 28 + j * 16}
+                  r={4}
                   fill={COLORS[s]}
                 />
                 <text
                   x={
                     hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 115 > W
                       ? hoverIdx * barGroupW + PAD.left - 100
-                      : hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 20
+                      : hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 22
                   }
-                  y={PAD.top + 28 + j * 13}
-                  fontSize={12}
+                  y={PAD.top + 33 + j * 16}
+                  fontSize={14}
                   fill="var(--muted-foreground)"
                 >
                   {s}: {data[hoverIdx][s]}
@@ -274,7 +274,7 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
           </g>
         )}
       </svg>
-      <div className="mt-2 flex items-center justify-center gap-4 text-xs text-muted-foreground">
+      <div className="mt-2 flex items-center justify-center gap-4 text-sm text-muted-foreground">
         {SERIES.map((s) => (
           <span key={s} className="flex items-center gap-1">
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[s] }} />

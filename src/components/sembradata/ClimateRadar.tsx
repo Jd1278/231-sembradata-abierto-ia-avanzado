@@ -121,17 +121,17 @@ export const ClimateRadar = memo(function ClimateRadar({
         ))}
 
         {data.map((d, i) => {
-          const labelPt = getPoint(i, R + 18);
+          const labelPt = getPoint(i, R + 22);
           const anchor = labelPt.x < CX - 10 ? "end" : labelPt.x > CX + 10 ? "start" : "middle";
           return (
             <text
               key={i}
               x={labelPt.x}
-              y={labelPt.y + 4}
+              y={labelPt.y + 5}
               textAnchor={anchor}
-              fontSize={11}
+              fontSize={16}
               fill="var(--muted-foreground)"
-              fontWeight={500}
+              fontWeight={600}
             >
               {d.variable}
             </text>
@@ -146,7 +146,7 @@ export const ClimateRadar = memo(function ClimateRadar({
               key={r}
               x={pt.x + 4}
               y={pt.y - 4}
-              fontSize={8}
+              fontSize={13}
               fill="var(--muted-foreground)"
               opacity={0.6}
             >
@@ -198,7 +198,7 @@ export const ClimateRadar = memo(function ClimateRadar({
               x={CX}
               y={22}
               textAnchor="middle"
-              fontSize={11}
+              fontSize={15}
               fill="var(--foreground)"
               fontWeight={600}
             >
@@ -207,7 +207,7 @@ export const ClimateRadar = memo(function ClimateRadar({
           </g>
         )}
       </svg>
-      <div className="mt-1 flex items-center justify-center gap-1 text-[11px] text-muted-foreground">
+      <div className="mt-1 flex items-center justify-center gap-1 text-sm text-muted-foreground">
         <span className="inline-block h-2 w-4 rounded bg-primary opacity-30" /> Valores normalizados
         (0–100%)
       </div>
