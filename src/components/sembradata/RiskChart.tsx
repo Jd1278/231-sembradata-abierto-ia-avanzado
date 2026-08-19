@@ -10,7 +10,7 @@ interface Props {
 }
 
 const W = 600;
-const H = 320;
+const H = 480;
 const PAD = { top: 16, right: 16, bottom: 36, left: 44 };
 const PW = W - PAD.left - PAD.right;
 const PH = H - PAD.top - PAD.bottom;
@@ -108,11 +108,11 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
 
   return (
     <div
-      className="h-[340px] w-full"
+      className="w-full"
       role="img"
       aria-label="Gráfico de riesgos climáticos por mes: sequía, heladas y plagas"
     >
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
         {[0, 25, 50, 75, 100].map((v) => {
           const y = yScale(v);
           return (

@@ -13,7 +13,7 @@ function seededRandom(seed: number): number {
 }
 
 const W = 500;
-const H = 260;
+const H = 400;
 const PAD = { top: 16, right: 16, bottom: 30, left: 42 };
 const PW = W - PAD.left - PAD.right;
 const PH = H - PAD.top - PAD.bottom;
@@ -96,11 +96,11 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
 
   return (
     <div
-      className="h-[340px] w-full"
+      className="w-full"
       role="img"
       aria-label={`Gráfico de rendimiento histórico y predicción para ${CROP_DATA[crop].label}`}
     >
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
         <defs>
           <linearGradient id="yf-hist" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} />

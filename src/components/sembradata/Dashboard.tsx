@@ -42,6 +42,7 @@ import {
   getOptimalPastDays,
   getTemporalRangeDescription,
 } from "../../services/temporal-optimizer";
+import { generateRecommendation, type RecommendationContext } from "@/services/chatbot";
 import { SectionErrorBoundary } from "./SectionErrorBoundary";
 import { SANTANDER } from "@/data/departamentos";
 import {
@@ -103,6 +104,7 @@ export function Dashboard() {
     loading: true,
     error: null,
   });
+  const [aiRecommendation, setAiRecommendation] = useState<string | null>(null);
 
   const filteredMunicipios = useMemo(() => {
     return santanderMunis.filter((m) => {
@@ -273,6 +275,33 @@ export function Dashboard() {
     }
   }, [muni, municipio]);
 
+  useEffect(() => {
+    if (!realtime.viability || !muni || !realtime.climate || !realtime.soil) {
+      setAiRecommendation(null);
+      return;
+    }
+    let cancelled = false;
+    const ctx: RecommendationContext = {
+      municipio: muni.name,
+      cultivo: cropInfo.label,
+      score: realtime.viability.score,
+      temp: realtime.climate.temperature,
+      precip: realtime.climate.precipitation,
+      humidity: realtime.climate.humidity,
+      ph: realtime.soil.ph,
+      organicMatter: realtime.soil.organicMatter,
+      texture: realtime.soil.texture,
+      altitude: computeAltitude(muni.factor),
+      month,
+    };
+    generateRecommendation(ctx).then((text) => {
+      if (!cancelled) setAiRecommendation(text);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [realtime.viability, realtime.climate, realtime.soil, muni, cropInfo.label, month]);
+
   const metrics = useMemo(() => {
     const v = realtime.viability;
     const c = realtime.climate;
@@ -441,24 +470,29 @@ export function Dashboard() {
                 </p>
                 {realtime.viability ? (
                   <div className="mt-2 space-y-2">
-                    <p className="text-sm leading-relaxed text-foreground">
-                      {realtime.viability.score >= 70 ? (
-                        <>
-                          Condiciones favorables para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>
-                          . Ventana óptima de siembra: <b>{cropInfo.window}</b>.
-                        </>
-                      ) : realtime.viability.score >= 50 ? (
-                        <>
-                          Riesgo moderado para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>.
-                          Revise los factores antes de sembrar.
-                        </>
-                      ) : (
-                        <>
-                          Alto riesgo para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>. Considere
-                          cultivos alternativos.
-                        </>
-                      )}
-                    </p>
+                    {aiRecommendation ? (
+                      <p className="text-sm leading-relaxed text-foreground">{aiRecommendation}</p>
+                    ) : realtime.loading ? null : (
+                      <p className="text-sm leading-relaxed text-foreground">
+                        {realtime.viability.score >= 70 ? (
+                          <>
+                            Condiciones favorables para <b>{cropInfo.label}</b> en{" "}
+                            <b>{muni?.name}</b>. Ventana óptima de siembra: <b>{cropInfo.window}</b>
+                            .
+                          </>
+                        ) : realtime.viability.score >= 50 ? (
+                          <>
+                            Riesgo moderado para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>.
+                            Revise los factores antes de sembrar.
+                          </>
+                        ) : (
+                          <>
+                            Alto riesgo para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>.
+                            Considere cultivos alternativos.
+                          </>
+                        )}
+                      </p>
+                    )}
                     {realtime.viability.recommendations.length > 0 && (
                       <ul className="space-y-1">
                         {realtime.viability.recommendations.slice(0, 3).map((rec, i) => (

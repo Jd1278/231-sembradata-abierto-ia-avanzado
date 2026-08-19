@@ -158,8 +158,8 @@ export const SantanderMap = memo(function SantanderMap({
             </g>
 
             {features.map((m, idx) => {
-              const risk = dynamicRisk ? dynamicRisk.level : m.risk[crop];
               const isSelected = m.name === selected;
+              const risk = isSelected && dynamicRisk ? dynamicRisk.level : m.risk[crop];
               const isHover = m.id === hover;
               const isFocused = idx === focusedIdx;
               const isFiltered = !filteredNames || filteredNames.has(m.name);

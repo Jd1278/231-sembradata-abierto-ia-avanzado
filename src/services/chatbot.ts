@@ -1,3 +1,43 @@
+const CHAT_ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+const CHAT_HEADERS = {
+  "Content-Type": "application/json",
+  apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+  Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+};
+
+export interface RecommendationContext {
+  municipio: string;
+  cultivo: string;
+  score: number;
+  temp: number;
+  precip: number;
+  humidity: number;
+  ph: number;
+  organicMatter: number;
+  texture: string;
+  altitude: number;
+  month: string;
+}
+
+export async function generateRecommendation(ctx: RecommendationContext): Promise<string | null> {
+  try {
+    const message = `Genera una recomendación agrícola concisa (máximo 3 oraciones) para ${ctx.cultivo} en ${ctx.municipio}, Santander.
+Datos: temperatura ${ctx.temp}°C, precipitación ${ctx.precip}mm, humedad ${ctx.humidity}%, pH ${ctx.ph}, materia orgánica ${ctx.organicMatter}%, textura ${ctx.texture}, altitud ${ctx.altitude}m, mes ${ctx.month}, score de viabilidad ${ctx.score}/100.
+Sé específico con el municipio y las condiciones actuales. Incluye una acción concreta.`;
+
+    const res = await fetch(CHAT_ENDPOINT, {
+      method: "POST",
+      headers: CHAT_HEADERS,
+      body: JSON.stringify({ message, sessionId: `rec-${ctx.municipio}-${ctx.cultivo}` }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.reply ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function normalize(text: string): string {
   return text
     .toLowerCase()

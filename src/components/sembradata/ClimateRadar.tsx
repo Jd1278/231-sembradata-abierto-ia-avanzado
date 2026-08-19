@@ -22,8 +22,8 @@ const AGRO_RANGES: Record<string, [number, number]> = {
 };
 
 const CX = 250;
-const CY = 140;
-const R = 110;
+const CY = 180;
+const R = 130;
 const RINGS = 5;
 
 export const ClimateRadar = memo(function ClimateRadar({
@@ -59,11 +59,11 @@ export const ClimateRadar = memo(function ClimateRadar({
 
   return (
     <div
-      className="h-[300px] w-full"
+      className="w-full"
       role="img"
       aria-label="Radar de variables climáticas: temperatura, humedad, precipitación, viento y radiación"
     >
-      <svg viewBox="0 0 500 280" className="h-full w-full">
+      <svg viewBox="0 0 500 360" className="w-full h-auto">
         <defs>
           <linearGradient id="radar-fill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.3} />
@@ -159,7 +159,7 @@ export const ClimateRadar = memo(function ClimateRadar({
           x={0}
           y={0}
           width={500}
-          height={280}
+          height={360}
           fill="transparent"
           onMouseLeave={() => setHoverIdx(null)}
           onMouseMove={(e) => {
@@ -167,7 +167,7 @@ export const ClimateRadar = memo(function ClimateRadar({
             if (!svg) return;
             const rect = svg.getBoundingClientRect();
             const mx = ((e.clientX - rect.left) / rect.width) * 500;
-            const my = ((e.clientY - rect.top) / rect.height) * 280;
+            const my = ((e.clientY - rect.top) / rect.height) * 360;
             let closest = 0;
             let minDist = Infinity;
             dataPoints.forEach((p, i) => {
