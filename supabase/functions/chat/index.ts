@@ -64,7 +64,13 @@ async function askLLM(
   systemPrompt: string,
   history: { role: string; content: string }[],
   userMessage: string,
+  ragFallback?: string,
 ): Promise<string> {
+  if (!GROQ_KEY) {
+    return (
+      ragFallback ?? "El servicio de IA no está configurado. Por favor contacte al administrador."
+    );
+  }
   const messages = [
     { role: "system", content: systemPrompt },
     ...history.slice(-6),
@@ -81,10 +87,17 @@ async function askLLM(
         max_tokens: 800,
       }),
     });
+    if (!res.ok) {
+      console.error("GROQ API error:", res.status);
+      return ragFallback ?? "El servicio de IA no está disponible temporalmente. Intenta de nuevo.";
+    }
     const data = await res.json();
-    return data.choices?.[0]?.message?.content ?? "No pude generar una respuesta.";
-  } catch {
-    return "Lo siento, no pude generar una respuesta en este momento. Intenta de nuevo.";
+    return data.choices?.[0]?.message?.content ?? ragFallback ?? "No pude generar una respuesta.";
+  } catch (e) {
+    console.error("GROQ fetch error:", e);
+    return (
+      ragFallback ?? "Lo siento, no pude generar una respuesta en este momento. Intenta de nuevo."
+    );
   }
 }
 
@@ -167,7 +180,8 @@ serve(async (req) => {
     );
 
     const llmHistory = formatHistoryForLLM(history);
-    const reply = await askLLM(systemPrompt, llmHistory, message);
+    const ragFallback = ragResults.length > 0 ? ragResults[0].entry.answer : undefined;
+    const reply = await askLLM(systemPrompt, llmHistory, message, ragFallback);
 
     await saveMessage(sid, { role: "assistant", content: reply, metadata: { intent } });
 

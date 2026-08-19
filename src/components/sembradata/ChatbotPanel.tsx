@@ -120,10 +120,13 @@ export function ChatbotPanel({ municipio, crop }: { municipio?: string; crop?: s
         },
       ]);
     } catch (err) {
+      console.error("Chat error:", err);
       const msg =
         err instanceof Error && err.message.includes("Failed to fetch")
           ? "No se pudo conectar con el servidor. Verifica tu conexión."
-          : "Ocurrió un error al procesar tu consulta. Por favor, intenta de nuevo.";
+          : err instanceof Error && err.message.includes("HTTP")
+            ? `Error del servidor (${err.message}). Intenta de nuevo.`
+            : "Ocurrió un error al procesar tu consulta. Por favor, intenta de nuevo.";
       setMessages((m) => [
         ...m,
         { id: Date.now() + 1, role: "assistant", text: msg, source: "error" },

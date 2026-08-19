@@ -25,7 +25,8 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
   const lastHistoricalYear = currentYear - 1;
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
-  const years = Array.from({ length: 10 }, (_, i) => lastHistoricalYear - 9 + i);
+  const futureYears = 2;
+  const years = Array.from({ length: 10 + futureYears }, (_, i) => lastHistoricalYear - 9 + i);
 
   const data = useMemo(() => {
     const historicalVariation = [0.78, 1.05, 0.88, 1.12, 0.82, 1.08, 0.91, 0.97, 1.03, 0.86];
@@ -64,20 +65,30 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
   }
 
   const histPts = makePath("hist");
-  const predPts = makePath("pred");
+
+  const overlapIdx = data.findIndex((d) => d.hist != null && d.pred != null);
+  const predStartIdx = data.findIndex((d) => d.pred != null && d.hist == null);
+  const predOnlyPts: string[] = [];
+  data.forEach((d, i) => {
+    if (d.pred != null && (d.hist == null || i === overlapIdx))
+      predOnlyPts.push(`${xScale(i)},${yScale(d.pred)}`);
+  });
 
   const histLine = histPts.length > 0 ? `M${histPts.join("L")}` : "";
-  const predLine = predPts.length > 0 ? `M${predPts.join("L")}` : "";
+  const predConnectPts: string[] = [];
+  if (overlapIdx >= 0)
+    predConnectPts.push(`${xScale(overlapIdx)},${yScale(data[overlapIdx].pred!)}`);
+  predOnlyPts.forEach((p) => predConnectPts.push(p));
+  const predLine = predConnectPts.length > 1 ? `M${predConnectPts.join("L")}` : "";
 
   const histArea =
     histPts.length > 0
       ? `M${histPts[0]}L${histPts.join("L")}L${xScale(data.findIndex((d) => d.hist != null) + histPts.length - 1)},${yScale(yMin)}L${xScale(data.findIndex((d) => d.hist != null))},${yScale(yMin)}Z`
       : "";
 
-  const predStartIdx = data.findIndex((d) => d.pred != null && d.hist == null);
   const predArea =
-    predPts.length > 0 && predStartIdx >= 0
-      ? `M${predPts[0]}L${predPts.join("L")}L${xScale(data.length - 1)},${yScale(yMin)}L${xScale(predStartIdx)},${yScale(yMin)}Z`
+    predOnlyPts.length > 1 && predStartIdx >= 0
+      ? `M${predOnlyPts[0]}L${predOnlyPts.join("L")}L${xScale(data.length - 1)},${yScale(yMin)}L${xScale(overlapIdx >= 0 ? overlapIdx : predStartIdx)},${yScale(yMin)}Z`
       : "";
 
   const hover = hoverIdx != null ? data[hoverIdx] : null;
@@ -85,7 +96,7 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
 
   return (
     <div
-      className="h-[280px] w-full"
+      className="h-[340px] w-full"
       role="img"
       aria-label={`Gráfico de rendimiento histórico y predicción para ${CROP_DATA[crop].label}`}
     >

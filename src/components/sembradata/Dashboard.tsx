@@ -44,7 +44,11 @@ import {
 } from "../../services/temporal-optimizer";
 import { SectionErrorBoundary } from "./SectionErrorBoundary";
 import { SANTANDER } from "@/data/departamentos";
-import { fetchCurrentClimate, type ClimateData } from "@/services/climate-api";
+import {
+  fetchCurrentClimate,
+  fetchHistoricalClimate,
+  type ClimateData,
+} from "@/services/climate-api";
 import { fetchSoilData, type SoilData } from "@/services/soil-service";
 import { evaluateViability, type ViabilityResult } from "@/types/prediction-v2";
 import { MONTH_LABELS } from "@/services/temporal-optimizer";
@@ -149,44 +153,92 @@ export function Dashboard() {
     const gen = ++fetchGen.current;
     setRealtime({ climate: null, soil: null, viability: null, loading: true, error: null });
     try {
-      const pastDays = getOptimalPastDays(crop);
-      const [climateData, soilData] = await Promise.all([
-        fetchCurrentClimate(lat, lng, pastDays),
+      const currentYear = new Date().getFullYear();
+      const selectedYear = Number(year);
+      const monthIndex = MONTH_LABELS.indexOf(month);
+      const selectedMonth = monthIndex >= 0 ? monthIndex + 1 : 1;
+
+      let climatePromise: Promise<ClimateData>;
+      if (selectedYear > currentYear) {
+        if (gen === fetchGen.current)
+          setRealtime({
+            climate: null,
+            soil: null,
+            viability: null,
+            loading: false,
+            error: `Datos para ${selectedYear} no están disponibles aún. Seleccione un año anterior.`,
+          });
+        return;
+      } else if (selectedYear < currentYear) {
+        const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
+        const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+        const endDate = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+        climatePromise = fetchHistoricalClimate(lat, lng, startDate, endDate);
+      } else {
+        const pastDays = getOptimalPastDays(crop);
+        climatePromise = fetchCurrentClimate(lat, lng, pastDays);
+      }
+
+      const [climateResult, soilResult] = await Promise.allSettled([
+        climatePromise,
         fetchSoilData(lat, lng),
       ]);
 
       if (gen !== fetchGen.current || controller.signal.aborted) return;
 
-      const tempOk =
-        climateData.temperature >= filters.tempRange[0] &&
-        climateData.temperature <= filters.tempRange[1];
-      const precipOk =
-        climateData.precipitation >= filters.precipRange[0] &&
-        climateData.precipitation <= filters.precipRange[1];
+      const climateData = climateResult.status === "fulfilled" ? climateResult.value : null;
+      const soilData = soilResult.status === "fulfilled" ? soilResult.value : null;
 
-      const alt = computeAltitude(muni.factor);
-      const altOk = alt >= filters.altitudeRange[0] && alt <= filters.altitudeRange[1];
-
-      if (!tempOk || !precipOk || !altOk) {
+      if (!climateData) {
         if (gen === fetchGen.current)
-          setRealtime({ climate: null, soil: null, viability: null, loading: false, error: null });
+          setRealtime({
+            climate: null,
+            soil: soilData,
+            viability: null,
+            loading: false,
+            error: "No se pudieron cargar los datos climáticos.",
+          });
         return;
       }
 
-      const monthIndex = MONTH_LABELS.indexOf(month);
-      const currentMonth = monthIndex >= 0 ? monthIndex + 1 : 1;
+      const isHistorical = selectedYear < currentYear;
+      const alt = computeAltitude(muni.factor);
+      if (!isHistorical) {
+        const tempOk =
+          climateData.temperature >= filters.tempRange[0] &&
+          climateData.temperature <= filters.tempRange[1];
+        const precipOk =
+          climateData.precipitation >= filters.precipRange[0] &&
+          climateData.precipitation <= filters.precipRange[1];
+
+        const altOk = alt >= filters.altitudeRange[0] && alt <= filters.altitudeRange[1];
+
+        if (!tempOk || !precipOk || !altOk) {
+          if (gen === fetchGen.current)
+            setRealtime({
+              climate: climateData,
+              soil: soilData,
+              viability: null,
+              loading: false,
+              error:
+                "Los datos no coinciden con los filtros activos. Ajuste los filtros de temperatura, precipitación o altitud.",
+            });
+          return;
+        }
+      }
+
       const v = evaluateViability(
         crop,
-        soilData.ph,
-        soilData.organicMatter,
-        soilData.texture,
+        soilData?.ph ?? 6.5,
+        soilData?.organicMatter ?? 3.0,
+        soilData?.texture ?? "Franco",
         climateData.temperature,
         climateData.precipitation,
         climateData.humidity,
         climateData.windSpeed,
         climateData.solarRadiation,
         alt,
-        currentMonth,
+        selectedMonth,
         true,
       );
       if (gen === fetchGen.current)
@@ -208,7 +260,7 @@ export function Dashboard() {
           error: "No se pudieron cargar los datos climáticos.",
         });
     }
-  }, [muni, crop, month, filters, lat, lng]);
+  }, [muni, crop, year, month, filters, lat, lng]);
 
   useEffect(() => {
     fetchRealtimeData();
@@ -388,24 +440,39 @@ export function Dashboard() {
                   Recomendación
                 </p>
                 {realtime.viability ? (
-                  <p className="mt-2 text-sm leading-relaxed text-foreground">
-                    {realtime.viability.score >= 70 ? (
-                      <>
-                        Condiciones favorables para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>.
-                        Ventana óptima de siembra: <b>{cropInfo.window}</b>.
-                      </>
-                    ) : realtime.viability.score >= 50 ? (
-                      <>
-                        Riesgo moderado para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>. Revise
-                        los factores antes de sembrar.
-                      </>
-                    ) : (
-                      <>
-                        Alto riesgo para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>. Considere
-                        cultivos alternativos.
-                      </>
+                  <div className="mt-2 space-y-2">
+                    <p className="text-sm leading-relaxed text-foreground">
+                      {realtime.viability.score >= 70 ? (
+                        <>
+                          Condiciones favorables para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>
+                          . Ventana óptima de siembra: <b>{cropInfo.window}</b>.
+                        </>
+                      ) : realtime.viability.score >= 50 ? (
+                        <>
+                          Riesgo moderado para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>.
+                          Revise los factores antes de sembrar.
+                        </>
+                      ) : (
+                        <>
+                          Alto riesgo para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>. Considere
+                          cultivos alternativos.
+                        </>
+                      )}
+                    </p>
+                    {realtime.viability.recommendations.length > 0 && (
+                      <ul className="space-y-1">
+                        {realtime.viability.recommendations.slice(0, 3).map((rec, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start gap-1.5 text-xs text-muted-foreground"
+                          >
+                            <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
+                            {rec}
+                          </li>
+                        ))}
+                      </ul>
                     )}
-                  </p>
+                  </div>
                 ) : (
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                     Seleccione un municipio y cultivo para ver recomendaciones.

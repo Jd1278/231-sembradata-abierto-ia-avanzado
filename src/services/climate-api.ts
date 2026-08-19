@@ -200,6 +200,7 @@ export async function fetchCurrentClimate(
   lng: number,
   pastDays = 90,
 ): Promise<ClimateData> {
+  const effectivePastDays = Math.min(pastDays, 93);
   const params = new URLSearchParams({
     latitude: lat.toString(),
     longitude: lng.toString(),
@@ -217,7 +218,7 @@ export async function fetchCurrentClimate(
     daily: DAILY_FIELDS,
     timezone: "America/Bogota",
     forecast_days: "7",
-    past_days: String(pastDays),
+    past_days: String(effectivePastDays),
   });
 
   const url = `${BASE_URL}/forecast?${params}`;
