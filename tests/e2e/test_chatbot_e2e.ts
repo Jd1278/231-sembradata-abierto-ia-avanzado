@@ -32,29 +32,29 @@ describe.skipIf(!hasSupabase)("E2E: Chatbot Edge Function", () => {
     expect(status).toBe(200);
     expect(["CROP_RECOMMENDATION", "UNKNOWN"]).toContain(body.intent);
     expect(body.data).toBeDefined();
-  }, 15000);
+  }, 30000);
 
   it("responds to requirements query", async () => {
     const { status, body } = await chat("Como sembrar cafe");
     expect(status).toBe(200);
     expect(["CROP_REQUIREMENTS", "UNKNOWN"]).toContain(body.intent);
-  }, 15000);
+  }, 30000);
 
   it("responds to risk query", async () => {
     const { status, body } = await chat("Cuales son los riesgos del cacao");
     expect(status).toBe(200);
     expect(["CROP_RISK_ANALYSIS", "UNKNOWN"]).toContain(body.intent);
-  }, 15000);
+  }, 30000);
 
   it("returns data sources when location is detected", async () => {
     const { body } = await chat("Viable en Bucaramanga?");
     expect(body.data).toBeDefined();
-  }, 15000);
+  }, 30000);
 
   it("handles multiple sessions independently", async () => {
     const r1 = await chat("Hola", "session-a");
     const r2 = await chat("Hola", "session-b");
     expect(r1.status).toBe(200);
     expect(r2.status).toBe(200);
-  }, 15000);
+  }, 30000);
 });

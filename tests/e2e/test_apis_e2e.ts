@@ -43,7 +43,7 @@ describe("E2E: External APIs", () => {
     expect(d.properties).toBeDefined();
     expect(d.properties.layers).toBeDefined();
     expect(d.properties.layers.length).toBeGreaterThan(0);
-  });
+  }, 15000);
 
   it("IDEAM Socrata returns station data", async () => {
     const r = await fetch("https://www.datos.gov.co/resource/57sv-p2fu.json?%24limit=2", {
