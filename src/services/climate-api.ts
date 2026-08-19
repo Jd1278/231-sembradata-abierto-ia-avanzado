@@ -161,16 +161,21 @@ function mapDailyData(raw: {
   shortwave_radiation_sum: number[];
   uv_index_max: number[];
 }): DailyClimate[] {
-  return raw.time.map((date, i) => ({
-    date,
-    tempMax: raw.temperature_2m_max?.[i] ?? 0,
-    tempMin: raw.temperature_2m_min?.[i] ?? 0,
-    precip: raw.precipitation_sum?.[i] ?? 0,
-    humidity: raw.relative_humidity_2m_mean?.[i] ?? 0,
-    windSpeed: raw.wind_speed_10m_mean?.[i] ?? 0,
-    solarRad: raw.shortwave_radiation_sum?.[i] ?? 0,
-    uvIndex: raw.uv_index_max?.[i] ?? 0,
-  }));
+  const result: DailyClimate[] = [];
+  for (let i = 0; i < raw.time.length; i++) {
+    if (raw.temperature_2m_max?.[i] == null || raw.temperature_2m_min?.[i] == null) continue;
+    result.push({
+      date: raw.time[i],
+      tempMax: raw.temperature_2m_max[i],
+      tempMin: raw.temperature_2m_min[i],
+      precip: raw.precipitation_sum?.[i] ?? 0,
+      humidity: raw.relative_humidity_2m_mean?.[i] ?? 0,
+      windSpeed: raw.wind_speed_10m_mean?.[i] ?? 0,
+      solarRad: raw.shortwave_radiation_sum?.[i] ?? 0,
+      uvIndex: raw.uv_index_max?.[i] ?? 0,
+    });
+  }
+  return result;
 }
 
 function computeAgriculturalIndices(
@@ -183,13 +188,32 @@ function computeAgriculturalIndices(
     const avg = (d.tempMax + d.tempMin) / 2;
     return sum + Math.max(0, avg - 10);
   }, 0);
+
+  // Hargreaves PET estimation (mm/day) per day, then sum
+  // Ra ≈ 15 mm/day for Santander (~6°N latitude)
+  const Ra = 15;
+  let totalPet = 0;
+  for (const d of dailyData) {
+    const tMean = (d.tempMax + d.tempMin) / 2;
+    const tRange = Math.max(0, d.tempMax - d.tempMin);
+    totalPet += 0.0023 * Math.sqrt(tRange) * (tMean + 17.8) * Ra;
+  }
+  const totalPrecip = dailyData.reduce((sum, d) => sum + d.precip, 0);
+  const days = dailyData.length || 1;
   const monthlyPrecip = avgPrecip * 30;
+
+  // Aridity index: P/PET ratio — higher = more humid
+  // 0 = hyper-arid, 0.3 = arid, 0.5 = semi-arid, 0.75 = sub-humid, 1+ = humid
+  const ratio = totalPet > 0 ? totalPrecip / totalPet : totalPrecip > 0 ? 2 : 0;
+
+  // Moisture stress: 0 = no stress (rain ≥ PET), up to 1 = severe deficit
+  const deficit = Math.max(0, totalPet - totalPrecip);
+  const moistureStress = totalPet > 0 ? Math.min(1, deficit / totalPet) : 0;
+
   return {
     GrowingDegreeDays: +gdd.toFixed(1),
-    aridityIndex: +Math.min(2, monthlyPrecip > 0 ? monthlyPrecip / (gdd * 0.002 + 0.5) : 0).toFixed(
-      2,
-    ),
-    moistureStressIndex: +(avgHumidity < 40 ? 1 : avgHumidity < 60 ? 0.5 : 0).toFixed(2),
+    aridityIndex: +Math.min(2, ratio).toFixed(2),
+    moistureStressIndex: +moistureStress.toFixed(2),
     frostRisk: +(dailyData.some((d) => d.tempMin < 2) ? 0.8 : 0).toFixed(2),
     droughtRisk: +(monthlyPrecip < 30 ? 0.9 : monthlyPrecip < 60 ? 0.5 : 0.1).toFixed(2),
   };
@@ -264,7 +288,7 @@ export async function fetchCurrentClimate(
     temperatureMax: len ? maxTemp : (current.temperature_2m ?? 0),
     temperatureMin: len ? minTemp : (current.temperature_2m ?? 0),
     humidity: current.relative_humidity_2m ?? avgHumidity,
-    precipitation: current.precipitation ?? avgPrecip,
+    precipitation: avgPrecip || (current.precipitation ?? 0),
     windSpeed: current.wind_speed_10m ?? 0,
     windDirection: current.wind_direction_10m ?? 0,
     solarRadiation: avgSolarRad,

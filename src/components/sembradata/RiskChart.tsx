@@ -139,7 +139,7 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
                 x={PAD.left - 6}
                 y={y + 4}
                 textAnchor="end"
-                fontSize={12}
+                fontSize={13}
                 fill="var(--muted-foreground)"
               >
                 {v}
@@ -156,7 +156,7 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
               x={groupX}
               y={H - 6}
               textAnchor="middle"
-              fontSize={11}
+              fontSize={12}
               fill="var(--muted-foreground)"
             >
               {d.mes.slice(0, 3)}
@@ -239,7 +239,7 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
                   : hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 8
               }
               y={PAD.top + 12}
-              fontSize={12}
+              fontSize={13}
               fill="var(--foreground)"
               fontWeight={600}
             >
@@ -264,7 +264,7 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
                       : hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 20
                   }
                   y={PAD.top + 28 + j * 13}
-                  fontSize={11}
+                  fontSize={12}
                   fill="var(--muted-foreground)"
                 >
                   {s}: {data[hoverIdx][s]}

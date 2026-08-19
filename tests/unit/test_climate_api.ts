@@ -56,7 +56,7 @@ describe("fetchCurrentClimate", () => {
 
     expect(result.temperature).toBe(24);
     expect(result.humidity).toBe(72);
-    expect(result.precipitation).toBe(5);
+    expect(result.precipitation).toBeCloseTo(5.667, 1);
     expect(result.windSpeed).toBe(12);
     expect(result.solarRadiation).toBe(200);
     expect(result.uvIndex).toBe(7);

@@ -130,7 +130,7 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
                 x={PAD.left - 6}
                 y={y + 4}
                 textAnchor="end"
-                fontSize={10}
+                fontSize={12}
                 fill="var(--muted-foreground)"
               >
                 {v.toFixed(1)}
@@ -145,7 +145,7 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
             x={xScale(i)}
             y={H - 4}
             textAnchor="middle"
-            fontSize={10}
+            fontSize={12}
             fill="var(--muted-foreground)"
           >
             {d.year.slice(2)}
@@ -235,7 +235,7 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
             <text
               x={tooltipFlip ? hoverX - 105 : hoverX + 12}
               y={PAD.top + 12}
-              fontSize={10}
+              fontSize={12}
               fill="var(--foreground)"
               fontWeight={600}
             >
@@ -245,7 +245,7 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
               <text
                 x={tooltipFlip ? hoverX - 105 : hoverX + 12}
                 y={PAD.top + 24}
-                fontSize={9}
+                fontSize={10}
                 fill="var(--primary)"
               >
                 Hist: {hover.hist.toFixed(2)} t/ha
@@ -255,7 +255,7 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
               <text
                 x={tooltipFlip ? hoverX - 105 : hoverX + 12}
                 y={hover.hist != null ? PAD.top + 34 : PAD.top + 24}
-                fontSize={9}
+                fontSize={10}
                 fill="var(--sky)"
               >
                 Pred: {hover.pred.toFixed(2)} t/ha
