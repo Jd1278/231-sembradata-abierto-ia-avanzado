@@ -286,7 +286,11 @@ export function Dashboard() {
       cultivo: cropInfo.label,
       score: realtime.viability.score,
       temp: realtime.climate.temperature,
-      precip: realtime.climate.precipitation,
+      precip:
+        realtime.climate.monthlyPrecipitation.length > 0
+          ? realtime.climate.monthlyPrecipitation[realtime.climate.monthlyPrecipitation.length - 1]
+              .precipitation
+          : realtime.climate.precipitation,
       humidity: realtime.climate.humidity,
       ph: realtime.soil.ph,
       organicMatter: realtime.soil.organicMatter,
@@ -307,6 +311,10 @@ export function Dashboard() {
   const metrics = useMemo(() => {
     const v = realtime.viability;
     const c = realtime.climate;
+    const lastMonth =
+      c && c.monthlyPrecipitation.length > 0
+        ? c.monthlyPrecipitation[c.monthlyPrecipitation.length - 1]
+        : null;
     return {
       yield: v
         ? ((v.score / 100) * cropInfo.baseYield * 1.5).toFixed(2)
@@ -318,7 +326,9 @@ export function Dashboard() {
             ? ("Medio" as const)
             : ("Alto" as const)
         : (muni?.risk[crop] ?? ("Bajo" as const)),
-      precip: c ? Math.round(c.precipitation) : Math.round(80 + (muni?.factor ?? 1) * 90),
+      precip: lastMonth
+        ? Math.round(lastMonth.precipitation)
+        : Math.round(80 + (muni?.factor ?? 1) * 90),
       temp: c ? c.temperature.toFixed(1) : (22 + (1 - (muni?.factor ?? 1)) * 4).toFixed(1),
       gdd: c?.agriculturalIndex?.GrowingDegreeDays ?? 0,
       aridez: c?.agriculturalIndex?.aridityIndex ?? 0,
@@ -568,10 +578,10 @@ export function Dashboard() {
                 />
                 <RiskKpiCard risk={metrics.risk} />
                 <KpiCard
-                  label="Precipitación esperada"
+                  label="Precipitación mensual"
                   value={String(metrics.precip)}
-                  unit="mm / mes"
-                  trend="Normal"
+                  unit="mm"
+                  trend={realtime.climate?.monthlyPrecipitation?.length ? "Real" : "Estimado"}
                   icon={<Droplets className="h-5 w-5" />}
                   tone="sky"
                 />
@@ -736,7 +746,13 @@ export function Dashboard() {
                           realtime.climate ? realtime.climate.temperature : Number(metrics.temp)
                         }
                         humidity={realtime.climate?.humidity ?? 75}
-                        precipitation={realtime.climate?.precipitation ?? metrics.precip}
+                        precipitation={
+                          realtime.climate?.monthlyPrecipitation?.length
+                            ? realtime.climate.monthlyPrecipitation[
+                                realtime.climate.monthlyPrecipitation.length - 1
+                              ].precipitation
+                            : metrics.precip
+                        }
                         windSpeed={realtime.climate?.windSpeed ?? 12}
                         solarRadiation={realtime.climate?.solarRadiation ?? 18}
                       />

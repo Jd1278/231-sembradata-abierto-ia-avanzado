@@ -30,27 +30,27 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
       if (hasRealData && climate) {
         const monthData = climate.dailyData.filter((d) => new Date(d.date).getMonth() === i);
         if (monthData.length > 0) {
-          let avgPrecip = 0,
+          let totalPrecip = 0,
             avgTemp = 0,
             avgHum = 0,
             avgWind = 0;
           for (const d of monthData) {
-            avgPrecip += d.precip;
+            totalPrecip += d.precip;
             avgTemp += (d.tempMax + d.tempMin) / 2;
             avgHum += d.humidity;
             avgWind += d.windSpeed;
           }
           const n = monthData.length;
-          avgPrecip /= n;
           avgTemp /= n;
           avgHum /= n;
           avgWind /= n;
+          // totalPrecip is the actual monthly sum (mm/month), not daily avg
           const droughtRisk = Math.round(
             Math.min(
               100,
               Math.max(
                 5,
-                (1 - avgPrecip / 60) * 40 +
+                (1 - totalPrecip / 150) * 40 +
                   (avgTemp > 28 ? 20 : avgTemp > 25 ? 10 : 0) +
                   (avgWind > 15 ? 10 : 0),
               ),
@@ -69,7 +69,7 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
                 5,
                 (avgHum > 85 ? 35 : avgHum > 75 ? 25 : avgHum > 65 ? 12 : 0) +
                   (avgTemp >= 20 && avgTemp <= 28 ? 20 : avgTemp >= 15 && avgTemp <= 30 ? 10 : 0) +
-                  (avgPrecip > 80 ? 15 : avgPrecip > 50 ? 8 : 0) +
+                  (totalPrecip > 200 ? 15 : totalPrecip > 120 ? 8 : 0) +
                   (avgWind > 20 ? 10 : 0),
               ),
             ),

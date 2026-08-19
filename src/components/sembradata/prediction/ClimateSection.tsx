@@ -8,6 +8,23 @@ interface Props {
 export function ClimateSection({ climate }: Props) {
   const windDir = getWindDirection(climate.windDirection);
 
+  const lastMonth =
+    climate.monthlyPrecipitation.length > 0
+      ? climate.monthlyPrecipitation[climate.monthlyPrecipitation.length - 1]
+      : null;
+  const monthlyTotal = lastMonth ? lastMonth.precipitation : 0;
+  const daysInMonth = lastMonth
+    ? climate.dailyData.filter((d) => {
+        const parts = d.date.split("-");
+        return Number(parts[0]) === lastMonth.year && Number(parts[1]) === lastMonth.month;
+      }).length
+    : 0;
+  const now = new Date();
+  const isCurrentMonth =
+    lastMonth && lastMonth.year === now.getFullYear() && lastMonth.month === now.getMonth() + 1;
+  const daysInCalendarMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const isPartialMonth = isCurrentMonth && daysInMonth < daysInCalendarMonth;
+
   return (
     <Card className="rounded-2xl">
       <CardHeader className="pb-3">
@@ -26,9 +43,13 @@ export function ClimateSection({ climate }: Props) {
             detail="Promedio"
           />
           <ClimateMetric
-            label="Precipitación"
-            value={`${(climate.precipitation * 30).toFixed(0)} mm/mes`}
-            detail={`Promedio: ${climate.precipitation.toFixed(1)} mm/día`}
+            label="Precipitación mensual"
+            value={`${monthlyTotal.toFixed(1)} mm`}
+            detail={
+              isPartialMonth
+                ? `Acumulado disponible (${daysInMonth} días)`
+                : `Promedio: ${climate.precipitation.toFixed(1)} mm/día`
+            }
           />
           <ClimateMetric
             label="Viento"

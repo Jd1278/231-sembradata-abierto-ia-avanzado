@@ -1,3 +1,9 @@
+export interface MonthlyPrecipitation {
+  year: number;
+  month: number;
+  precipitation: number;
+}
+
 export interface ClimateData {
   temperature: number;
   temperatureMax: number;
@@ -12,6 +18,7 @@ export interface ClimateData {
   pressure: number;
   evapotranspiration: number;
   dailyData: DailyClimate[];
+  monthlyPrecipitation: MonthlyPrecipitation[];
   agriculturalIndex: AgriculturalIndices;
 }
 
@@ -178,11 +185,37 @@ function mapDailyData(raw: {
   return result;
 }
 
+function parseYearMonth(dateStr: string): { year: number; month: number } {
+  const parts = dateStr.split("-");
+  return { year: Number(parts[0]), month: Number(parts[1]) };
+}
+
+export function aggregateMonthlyPrecipitation(dailyData: DailyClimate[]): MonthlyPrecipitation[] {
+  const map = new Map<string, number>();
+  for (const d of dailyData) {
+    const { year, month } = parseYearMonth(d.date);
+    const key = `${year}-${month}`;
+    map.set(key, (map.get(key) ?? 0) + (d.precip ?? 0));
+  }
+  const result: MonthlyPrecipitation[] = [];
+  for (const [key, precip] of map) {
+    const [yearStr, monthStr] = key.split("-");
+    result.push({
+      year: Number(yearStr),
+      month: Number(monthStr),
+      precipitation: +precip.toFixed(1),
+    });
+  }
+  result.sort((a, b) => a.year - b.year || a.month - b.month);
+  return result;
+}
+
 function computeAgriculturalIndices(
   dailyData: DailyClimate[],
   avgTemp: number,
   avgPrecip: number,
   avgHumidity: number,
+  monthlyPrecipitation: MonthlyPrecipitation[],
 ): AgriculturalIndices {
   const gdd = dailyData.reduce((sum, d) => {
     const avg = (d.tempMax + d.tempMin) / 2;
@@ -200,7 +233,11 @@ function computeAgriculturalIndices(
     totalPet += 0.0023 * Math.sqrt(tRange) * (tMean + 17.8) * Ra;
   }
   const totalPrecip = dailyData.reduce((sum, d) => sum + d.precip, 0);
-  const monthlyPrecip = avgPrecip * 30;
+
+  // Use the most recent month's actual accumulated precipitation for drought risk
+  const lastMonth =
+    monthlyPrecipitation.length > 0 ? monthlyPrecipitation[monthlyPrecipitation.length - 1] : null;
+  const recentMonthlyPrecip = lastMonth ? lastMonth.precipitation : 0;
 
   // Aridity index (De Martonne-inspired): P/PET
   // < 0.3 = árido, 0.3–0.5 = semi-árido, 0.5–0.75 = semi-húmedo, 0.75–1 = sub-húmedo, > 1 = húmedo
@@ -216,12 +253,16 @@ function computeAgriculturalIndices(
   }
   const moistureStress = dailyData.length > 0 ? dryDays / dailyData.length : 0;
 
+  // Drought risk based on actual monthly precipitation (mm/month)
+  // < 50 mm/month = severe drought risk, < 100 mm/month = moderate, else low
   return {
     GrowingDegreeDays: +gdd.toFixed(1),
     aridityIndex: +Math.min(2, ratio).toFixed(2),
     moistureStressIndex: +moistureStress.toFixed(2),
     frostRisk: +(dailyData.some((d) => d.tempMin < 2) ? 0.8 : 0).toFixed(2),
-    droughtRisk: +(monthlyPrecip < 30 ? 0.9 : monthlyPrecip < 60 ? 0.5 : 0.1).toFixed(2),
+    droughtRisk: +(recentMonthlyPrecip < 50 ? 0.9 : recentMonthlyPrecip < 100 ? 0.5 : 0.1).toFixed(
+      2,
+    ),
   };
 }
 
@@ -289,6 +330,8 @@ export async function fetchCurrentClimate(
   const avgSolarRad = len ? solarSum / len : 0;
   const gdd = Math.max(0, avgTemp - 10);
 
+  const monthlyPrecipitation = aggregateMonthlyPrecipitation(dailyData);
+
   return {
     temperature: current.temperature_2m ?? avgTemp,
     temperatureMax: len ? maxTemp : (current.temperature_2m ?? 0),
@@ -303,7 +346,14 @@ export async function fetchCurrentClimate(
     pressure: current.surface_pressure ?? 1013,
     evapotranspiration: +(gdd * 0.15).toFixed(1),
     dailyData,
-    agriculturalIndex: computeAgriculturalIndices(dailyData, avgTemp, avgPrecip, avgHumidity),
+    monthlyPrecipitation,
+    agriculturalIndex: computeAgriculturalIndices(
+      dailyData,
+      avgTemp,
+      avgPrecip,
+      avgHumidity,
+      monthlyPrecipitation,
+    ),
   };
 }
 
@@ -366,6 +416,8 @@ export async function fetchHistoricalClimate(
   const avgUv = len ? uvSum / len : 0;
   const gdd = Math.max(0, avgTemp - 10);
 
+  const monthlyPrecipitation = aggregateMonthlyPrecipitation(dailyData);
+
   return {
     temperature: avgTemp,
     temperatureMax: len ? maxTemp : 0,
@@ -380,7 +432,14 @@ export async function fetchHistoricalClimate(
     pressure: 1013,
     evapotranspiration: +(gdd * 0.15).toFixed(1),
     dailyData,
-    agriculturalIndex: computeAgriculturalIndices(dailyData, avgTemp, avgPrecip, avgHumidity),
+    monthlyPrecipitation,
+    agriculturalIndex: computeAgriculturalIndices(
+      dailyData,
+      avgTemp,
+      avgPrecip,
+      avgHumidity,
+      monthlyPrecipitation,
+    ),
   };
 }
 

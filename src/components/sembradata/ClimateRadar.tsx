@@ -16,7 +16,7 @@ function normalize(value: number, min: number, max: number) {
 const AGRO_RANGES: Record<string, [number, number]> = {
   temperature: [0, 40],
   humidity: [0, 100],
-  precipitation: [0, 500],
+  precipitation: [0, 300],
   windSpeed: [0, 40],
   solarRadiation: [0, 30],
 };

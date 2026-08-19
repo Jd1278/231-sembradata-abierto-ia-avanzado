@@ -3,6 +3,8 @@ import {
   fetchCurrentClimate,
   fetchHistoricalClimate,
   clearClimateCache,
+  aggregateMonthlyPrecipitation,
+  type DailyClimate,
 } from "../../src/services/climate-api";
 
 const rawDailyData = {
@@ -63,6 +65,9 @@ describe("fetchCurrentClimate", () => {
     expect(result.cloudCover).toBe(40);
     expect(result.pressure).toBe(1013);
     expect(result.evapotranspiration).toBeGreaterThanOrEqual(0);
+    expect(result.monthlyPrecipitation).toBeDefined();
+    expect(Array.isArray(result.monthlyPrecipitation)).toBe(true);
+    expect(result.monthlyPrecipitation.length).toBeGreaterThan(0);
   });
 
   it("parses daily data correctly (3 days)", async () => {
@@ -271,5 +276,239 @@ describe("fetchCurrentClimate - edge cases in daily data", () => {
     expect(result.agriculturalIndex.frostRisk).toBe(0);
     expect(result.agriculturalIndex.droughtRisk).toBe(0.9);
     expect(result.agriculturalIndex.moistureStressIndex).toBe(1);
+  });
+});
+
+describe("aggregateMonthlyPrecipitation", () => {
+  it("Case 1: sums daily precip within a single month", () => {
+    const daily: DailyClimate[] = [
+      {
+        date: "2026-08-01",
+        tempMax: 28,
+        tempMin: 18,
+        precip: 10,
+        humidity: 70,
+        windSpeed: 10,
+        solarRad: 20,
+        uvIndex: 8,
+      },
+      {
+        date: "2026-08-02",
+        tempMax: 30,
+        tempMin: 19,
+        precip: 20,
+        humidity: 65,
+        windSpeed: 12,
+        solarRad: 22,
+        uvIndex: 9,
+      },
+      {
+        date: "2026-08-03",
+        tempMax: 27,
+        tempMin: 17,
+        precip: 5,
+        humidity: 75,
+        windSpeed: 8,
+        solarRad: 18,
+        uvIndex: 7,
+      },
+    ];
+    const result = aggregateMonthlyPrecipitation(daily);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({ year: 2026, month: 8, precipitation: 35 });
+  });
+
+  it("Case 2: splits daily precip across two months", () => {
+    const daily: DailyClimate[] = [
+      {
+        date: "2026-07-31",
+        tempMax: 28,
+        tempMin: 18,
+        precip: 10,
+        humidity: 70,
+        windSpeed: 10,
+        solarRad: 20,
+        uvIndex: 8,
+      },
+      {
+        date: "2026-08-01",
+        tempMax: 30,
+        tempMin: 19,
+        precip: 20,
+        humidity: 65,
+        windSpeed: 12,
+        solarRad: 22,
+        uvIndex: 9,
+      },
+      {
+        date: "2026-08-02",
+        tempMax: 27,
+        tempMin: 17,
+        precip: 5,
+        humidity: 75,
+        windSpeed: 8,
+        solarRad: 18,
+        uvIndex: 7,
+      },
+    ];
+    const result = aggregateMonthlyPrecipitation(daily);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({ year: 2026, month: 7, precipitation: 10 });
+    expect(result[1]).toEqual({ year: 2026, month: 8, precipitation: 25 });
+  });
+
+  it("Case 3: handles year boundary correctly", () => {
+    const daily: DailyClimate[] = [
+      {
+        date: "2025-12-31",
+        tempMax: 25,
+        tempMin: 15,
+        precip: 15,
+        humidity: 60,
+        windSpeed: 10,
+        solarRad: 20,
+        uvIndex: 7,
+      },
+      {
+        date: "2026-01-01",
+        tempMax: 28,
+        tempMin: 18,
+        precip: 20,
+        humidity: 70,
+        windSpeed: 12,
+        solarRad: 22,
+        uvIndex: 8,
+      },
+    ];
+    const result = aggregateMonthlyPrecipitation(daily);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({ year: 2025, month: 12, precipitation: 15 });
+    expect(result[1]).toEqual({ year: 2026, month: 1, precipitation: 20 });
+  });
+
+  it("Case 4: handles zero precipitation values", () => {
+    const daily: DailyClimate[] = [
+      {
+        date: "2026-08-01",
+        tempMax: 28,
+        tempMin: 18,
+        precip: 0,
+        humidity: 50,
+        windSpeed: 10,
+        solarRad: 25,
+        uvIndex: 9,
+      },
+      {
+        date: "2026-08-02",
+        tempMax: 30,
+        tempMin: 19,
+        precip: 0,
+        humidity: 45,
+        windSpeed: 12,
+        solarRad: 26,
+        uvIndex: 10,
+      },
+      {
+        date: "2026-08-03",
+        tempMax: 27,
+        tempMin: 17,
+        precip: 10,
+        humidity: 70,
+        windSpeed: 8,
+        solarRad: 18,
+        uvIndex: 7,
+      },
+    ];
+    const result = aggregateMonthlyPrecipitation(daily);
+    expect(result).toHaveLength(1);
+    expect(result[0].precipitation).toBe(10);
+  });
+
+  it("Case 5: incomplete month — returns actual accumulated value without extrapolation", () => {
+    const daily: DailyClimate[] = Array.from({ length: 15 }, (_, i) => ({
+      date: `2026-08-${String(i + 1).padStart(2, "0")}`,
+      tempMax: 28,
+      tempMin: 18,
+      precip: 10,
+      humidity: 70,
+      windSpeed: 10,
+      solarRad: 20,
+      uvIndex: 8,
+    }));
+    const result = aggregateMonthlyPrecipitation(daily);
+    expect(result).toHaveLength(1);
+    expect(result[0].precipitation).toBe(150);
+    expect(result[0].month).toBe(8);
+  });
+
+  it("returns empty array for empty input", () => {
+    expect(aggregateMonthlyPrecipitation([])).toEqual([]);
+  });
+
+  it("sorts results chronologically", () => {
+    const daily: DailyClimate[] = [
+      {
+        date: "2026-03-01",
+        tempMax: 28,
+        tempMin: 18,
+        precip: 5,
+        humidity: 70,
+        windSpeed: 10,
+        solarRad: 20,
+        uvIndex: 8,
+      },
+      {
+        date: "2026-01-15",
+        tempMax: 26,
+        tempMin: 16,
+        precip: 8,
+        humidity: 65,
+        windSpeed: 12,
+        solarRad: 22,
+        uvIndex: 7,
+      },
+      {
+        date: "2026-02-20",
+        tempMax: 27,
+        tempMin: 17,
+        precip: 12,
+        humidity: 68,
+        windSpeed: 11,
+        solarRad: 21,
+        uvIndex: 8,
+      },
+    ];
+    const result = aggregateMonthlyPrecipitation(daily);
+    expect(result).toHaveLength(3);
+    expect(result[0].month).toBe(1);
+    expect(result[1].month).toBe(2);
+    expect(result[2].month).toBe(3);
+  });
+
+  it("handles null/undefined precip values gracefully", () => {
+    const daily: DailyClimate[] = [
+      {
+        date: "2026-08-01",
+        tempMax: 28,
+        tempMin: 18,
+        precip: 5,
+        humidity: 70,
+        windSpeed: 10,
+        solarRad: 20,
+        uvIndex: 8,
+      },
+      {
+        date: "2026-08-02",
+        tempMax: 30,
+        tempMin: 19,
+        precip: 0,
+        humidity: 65,
+        windSpeed: 12,
+        solarRad: 22,
+        uvIndex: 9,
+      },
+    ];
+    const result = aggregateMonthlyPrecipitation(daily);
+    expect(result[0].precipitation).toBe(5);
   });
 });
