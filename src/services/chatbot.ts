@@ -4,6 +4,7 @@ const CHAT_HEADERS = {
   apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
   Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
 };
+const SUPABASE_REST = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1`;
 
 export interface RecommendationContext {
   municipio: string;
@@ -19,7 +20,70 @@ export interface RecommendationContext {
   month: string;
 }
 
+function getScoreRange(score: number): string {
+  if (score >= 70) return "high";
+  if (score >= 50) return "mid";
+  return "low";
+}
+
+async function getCachedRecommendation(
+  municipio: string,
+  cultivo: string,
+  scoreRange: string,
+): Promise<string | null> {
+  try {
+    const params = new URLSearchParams({
+      municipio: `eq.${municipio}`,
+      cultivo: `eq.${cultivo}`,
+      score_range: `eq.${scoreRange}`,
+      order: "created_at.desc",
+      limit: "1",
+      select: "recommendation",
+    });
+    const r = await fetch(`${SUPABASE_REST}/recommendations_cache?${params}`, {
+      headers: { apikey: CHAT_HEADERS.apikey, Authorization: CHAT_HEADERS.Authorization },
+    });
+    if (!r.ok) return null;
+    const rows = (await r.json()) as { recommendation: string }[];
+    return rows[0]?.recommendation ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function cacheRecommendation(
+  municipio: string,
+  cultivo: string,
+  scoreRange: string,
+  recommendation: string,
+  context: RecommendationContext,
+): Promise<void> {
+  try {
+    await fetch(`${SUPABASE_REST}/recommendations_cache`, {
+      method: "POST",
+      headers: {
+        ...CHAT_HEADERS,
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        municipio,
+        cultivo,
+        score_range: scoreRange,
+        recommendation,
+        context,
+      }),
+    });
+  } catch {
+    // silent fail for cache write
+  }
+}
+
 export async function generateRecommendation(ctx: RecommendationContext): Promise<string | null> {
+  const scoreRange = getScoreRange(ctx.score);
+
+  const cached = await getCachedRecommendation(ctx.municipio, ctx.cultivo, scoreRange);
+  if (cached) return cached;
+
   try {
     const message = `Genera una recomendación agrícola concisa (máximo 3 oraciones) para ${ctx.cultivo} en ${ctx.municipio}, Santander.
 Datos: temperatura ${ctx.temp}°C, precipitación ${ctx.precip}mm, humedad ${ctx.humidity}%, pH ${ctx.ph}, materia orgánica ${ctx.organicMatter}%, textura ${ctx.texture}, altitud ${ctx.altitude}m, mes ${ctx.month}, score de viabilidad ${ctx.score}/100.
@@ -32,7 +96,13 @@ Sé específico con el municipio y las condiciones actuales. Incluye una acción
     });
     if (!res.ok) return null;
     const data = await res.json();
-    return data.reply ?? null;
+    const reply: string | null = data.reply ?? null;
+
+    if (reply) {
+      await cacheRecommendation(ctx.municipio, ctx.cultivo, scoreRange, reply, ctx);
+    }
+
+    return reply;
   } catch {
     return null;
   }
