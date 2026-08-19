@@ -28,6 +28,7 @@ export function NdviSection({ lat, lng }: Props) {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     async function load() {
       try {
@@ -44,7 +45,9 @@ export function NdviSection({ lat, lng }: Props) {
           timezone: "America/Bogota",
         });
 
-        const res = await fetch(`https://archive-api.open-meteo.com/v1/archive?${params}`);
+        const res = await fetch(`https://archive-api.open-meteo.com/v1/archive?${params}`, {
+          signal: controller.signal,
+        });
 
         if (!res.ok) throw new Error("NDVI fetch failed");
         const raw = await res.json();
@@ -73,6 +76,7 @@ export function NdviSection({ lat, lng }: Props) {
     load();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [lat, lng]);
 

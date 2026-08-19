@@ -233,7 +233,9 @@ export async function fetchCurrentClimate(
     setCache(url, data);
   }
   const current = (data.current ?? {}) as Record<string, number>;
-  const dailyData = mapDailyData(data.daily as Parameters<typeof mapDailyData>[0]);
+  const dailyRaw = data.daily as Record<string, unknown[]> | undefined;
+  if (!dailyRaw?.time) throw new Error("Invalid climate API response: missing daily.time");
+  const dailyData = mapDailyData(dailyRaw as Parameters<typeof mapDailyData>[0]);
 
   let tempSum = 0,
     precipSum = 0,
@@ -301,7 +303,10 @@ export async function fetchHistoricalClimate(
     data = (await res.json()) as Record<string, unknown>;
     setCache(url, data);
   }
-  const dailyData = mapDailyData(data.daily as Parameters<typeof mapDailyData>[0]);
+  const dailyRaw = data.daily as Record<string, unknown[]> | undefined;
+  if (!dailyRaw?.time)
+    throw new Error("Invalid historical climate API response: missing daily.time");
+  const dailyData = mapDailyData(dailyRaw as Parameters<typeof mapDailyData>[0]);
 
   let tempSum = 0,
     precipSum = 0,
@@ -370,7 +375,9 @@ export async function fetchRecentHistory(lat: number, lng: number): Promise<Hist
     data = (await res.json()) as Record<string, unknown>;
     setCache(url, data);
   }
-  const dailyData = mapDailyData(data.daily as Parameters<typeof mapDailyData>[0]);
+  const dailyRaw = data.daily as Record<string, unknown[]> | undefined;
+  if (!dailyRaw?.time) throw new Error("Invalid climate API response: missing daily.time");
+  const dailyData = mapDailyData(dailyRaw as Parameters<typeof mapDailyData>[0]);
 
   let tempSum = 0,
     precipSum = 0,

@@ -115,9 +115,13 @@ export function PredictionPanel({
       setError(null);
       try {
         // Fetch elevation from Open-Meteo
+        const elevController = new AbortController();
+        const elevTimer = setTimeout(() => elevController.abort(), 8000);
         const elevRes = await fetch(
           `https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lng}`,
+          { signal: elevController.signal },
         ).catch(() => null);
+        clearTimeout(elevTimer);
         const elevData = elevRes ? await elevRes.json() : null;
         const elev = elevData?.elevation?.[0] ?? altitude;
 

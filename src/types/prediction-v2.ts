@@ -451,6 +451,18 @@ export function evaluateViability(
   month: number = new Date().getMonth() + 1,
   hasRealData: boolean = true,
 ): ViabilityResult {
+  // Guard against NaN/Infinity from corrupt API data
+  const safe = (v: number, fallback: number) => (Number.isFinite(v) ? v : fallback);
+
+  soilPh = safe(soilPh, 6.5);
+  soilOrganicMatter = safe(soilOrganicMatter, 3.0);
+  temperature = safe(temperature, 22);
+  precipitation = safe(precipitation, 5);
+  humidity = safe(humidity, 70);
+  windSpeed = safe(windSpeed, 10);
+  solarRadiation = safe(solarRadiation, 15);
+  altitude = safe(altitude, 1000);
+
   const profile = CROP_PROFILES[crop];
   const factors: FactorDetail[] = [];
   let weightedScore = 0;

@@ -26,9 +26,9 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const futureYears = 2;
-  const years = Array.from({ length: 10 + futureYears }, (_, i) => lastHistoricalYear - 9 + i);
 
   const data = useMemo(() => {
+    const years = Array.from({ length: 10 + futureYears }, (_, i) => lastHistoricalYear - 9 + i);
     const historicalVariation = [0.78, 1.05, 0.88, 1.12, 0.82, 1.08, 0.91, 0.97, 1.03, 0.86];
     return years.map((year, i) => {
       const variation = historicalVariation[i % historicalVariation.length];
@@ -45,7 +45,7 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
       const predYield = +(base * (0.95 + scoreAdjustment * 0.15 + predNoise)).toFixed(2);
       return { year: String(year), hist: null, pred: predYield };
     });
-  }, [base, scoreAdjustment, lastHistoricalYear, years]);
+  }, [base, scoreAdjustment, lastHistoricalYear]);
 
   const allValues = data.flatMap((d) => [d.hist, d.pred]).filter((v): v is number => v != null);
   const yMin = Math.floor(Math.min(...allValues) * 0.9);

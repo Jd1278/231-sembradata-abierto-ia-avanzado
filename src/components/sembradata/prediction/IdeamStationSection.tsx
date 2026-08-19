@@ -54,7 +54,13 @@ export function IdeamStationSection({ lat, lng, departamento }: Props) {
   }, [lat, lng, departamento]);
 
   useEffect(() => {
-    fetchData().then(() => {});
+    let cancelled = false;
+    fetchData().then(() => {
+      if (cancelled) return;
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [fetchData]);
 
   if (loading) return <IdeamSkeleton />;

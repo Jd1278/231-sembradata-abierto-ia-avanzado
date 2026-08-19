@@ -4,6 +4,14 @@ interface RateLimitEntry {
 }
 
 const store = new Map<string, RateLimitEntry>();
+let cleanupCounter = 0;
+
+function cleanupExpired() {
+  const now = Date.now();
+  for (const [key, entry] of store) {
+    if (now > entry.resetAt) store.delete(key);
+  }
+}
 
 export interface RateLimitConfig {
   maxRequests: number;
@@ -25,6 +33,9 @@ function getKey(service: string, identifier: string): string {
 export function canMakeRequest(service: string, identifier = "global"): boolean {
   const config = DEFAULTS[service];
   if (!config) return true;
+
+  // Periodic cleanup every 100 requests
+  if (++cleanupCounter % 100 === 0) cleanupExpired();
 
   const key = getKey(service, identifier);
   const now = Date.now();

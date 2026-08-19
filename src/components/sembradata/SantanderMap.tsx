@@ -144,18 +144,9 @@ export const SantanderMap = memo(function SantanderMap({
                   opacity="0.5"
                 />
               </pattern>
-              <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="1.4" />
-              </filter>
             </defs>
 
             <rect x="0" y="0" width={VIEW_W} height={VIEW_H} fill="url(#grid)" />
-
-            <g filter="url(#soft)" opacity="0.35">
-              {features.map((m) => (
-                <path key={`glow-${m.id}`} d={m.path} className="fill-primary/20" />
-              ))}
-            </g>
 
             {features.map((m, idx) => {
               const isSelected = m.name === selected;

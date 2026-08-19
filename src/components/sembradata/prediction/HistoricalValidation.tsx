@@ -51,7 +51,13 @@ export function HistoricalValidation({ lat, lng, forecastTemps, forecastPrecip, 
   }, [lat, lng, crop]);
 
   useEffect(() => {
-    fetchData().then(() => {});
+    let cancelled = false;
+    fetchData().then(() => {
+      if (cancelled) return;
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [fetchData]);
 
   if (loading) return <HistoricalSkeleton />;

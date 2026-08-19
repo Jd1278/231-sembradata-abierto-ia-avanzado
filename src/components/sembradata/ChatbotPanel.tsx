@@ -98,11 +98,19 @@ export function ChatbotPanel({ municipio, crop }: { municipio?: string; crop?: s
     setMessages((m) => [...m, { id: Date.now(), role: "user", text: q }]);
     setLoading(true);
     try {
-      const res = await fetch(CHAT_ENDPOINT, {
-        method: "POST",
-        headers: CHAT_HEADERS,
-        body: JSON.stringify({ message: q, sessionId }),
-      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30_000);
+      let res: Response;
+      try {
+        res = await fetch(CHAT_ENDPOINT, {
+          method: "POST",
+          headers: CHAT_HEADERS,
+          body: JSON.stringify({ message: q, sessionId }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
       if (!res.ok) {
         const errBody = await res.json().catch(() => null);
         throw new Error(errBody?.error ?? `HTTP ${res.status}`);

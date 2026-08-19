@@ -34,6 +34,7 @@ async function fetchClimate(lat: number, lon: number) {
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m&daily=temperature_2m_min,temperature_2m_max,precipitation_sum&timezone=auto&forecast_days=7`;
     const r = await fetchWithTimeout(url, 8000);
+    if (!r.ok) return null;
     return await r.json();
   } catch {
     return null;
@@ -44,6 +45,7 @@ async function fetchSoil(lat: number, lon: number) {
   try {
     const url = `https://rest.isric.org/soilgrids/v2.0/properties/query?lon=${lon}&lat=${lat}&depth=0-5cm&value=mean&properties=phh2o,clay,sand,silt,ocd`;
     const r = await fetchWithTimeout(url, 15000);
+    if (!r.ok) return null;
     const d = await r.json();
     const get = (p: string) =>
       d.properties?.layers?.find(
@@ -101,29 +103,42 @@ async function askLLM(
   }
 }
 
-function jsonResponse(body: Record<string, unknown>, status = 200) {
+const ALLOWED_ORIGINS = [
+  "https://231-sembradata-abierto-ia-avanzado.vercel.app",
+  "https://lovable.dev",
+];
+
+function getCorsHeaders(origin: string | null) {
+  const allowed = ALLOWED_ORIGINS.includes(origin ?? "") ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowed ?? "*",
+    "Access-Control-Allow-Methods": "POST",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
+}
+
+function jsonResponse(body: Record<string, unknown>, status = 200, origin: string | null = null) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
+      ...getCorsHeaders(origin),
     },
   });
 }
 
 serve(async (req) => {
+  const origin = req.headers.get("origin");
+
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST",
-        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-      },
-    });
+    return new Response(null, { headers: getCorsHeaders(origin) });
   }
 
   try {
     const { message, sessionId }: ChatRequest = await req.json();
+    if (!message || typeof message !== "string" || message.length > 2000) {
+      return jsonResponse({ error: "Invalid message" }, 400, origin);
+    }
     const sid = sessionId || crypto.randomUUID();
 
     await saveMessage(sid, { role: "user", content: message });
@@ -135,7 +150,7 @@ serve(async (req) => {
       const reply =
         "¡Hola! 👋 Soy tu asistente agrícola de SembraData. Puedo ayudarte a:\n\n🌱 Recomendar cultivos para tu municipio\n⚠️ Analizar riesgos de un cultivo\n📋 Revisar requisitos de siembra\n\n¿Qué necesitas saber hoy?";
       await saveMessage(sid, { role: "assistant", content: reply, metadata: { intent } });
-      return jsonResponse({ reply, intent, data: null });
+      return jsonResponse({ reply, intent, data: null }, 200, origin);
     }
 
     const entities = extractEntities(message);
@@ -146,7 +161,7 @@ serve(async (req) => {
       const reply =
         '🤔 Para responder necesito que me indiques el **municipio**. Ejemplo: *"¿Qué cultivo es viable en **San Gil**?"*';
       await saveMessage(sid, { role: "assistant", content: reply, metadata: { intent } });
-      return jsonResponse({ reply, intent, data: null });
+      return jsonResponse({ reply, intent, data: null }, 200, origin);
     }
 
     const [ragResults, geo] = await Promise.all([
@@ -185,17 +200,21 @@ serve(async (req) => {
 
     await saveMessage(sid, { role: "assistant", content: reply, metadata: { intent } });
 
-    return jsonResponse({
-      reply,
-      intent,
-      data: {
-        municipio: geo?.name ?? municipio ?? null,
-        cultivo: cultivo ?? null,
-        lat: geo?.latitude ?? null,
-        lon: geo?.longitude ?? null,
-        sources,
+    return jsonResponse(
+      {
+        reply,
+        intent,
+        data: {
+          municipio: geo?.name ?? municipio ?? null,
+          cultivo: cultivo ?? null,
+          lat: geo?.latitude ?? null,
+          lon: geo?.longitude ?? null,
+          sources,
+        },
       },
-    });
+      200,
+      origin,
+    );
   } catch (err) {
     console.error("Chat error:", err);
     return jsonResponse(
@@ -206,6 +225,7 @@ serve(async (req) => {
         data: null,
       },
       500,
+      origin,
     );
   }
 });

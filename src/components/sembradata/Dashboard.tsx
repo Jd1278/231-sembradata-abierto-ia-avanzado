@@ -294,9 +294,11 @@ export function Dashboard() {
       altitude: computeAltitude(muni.factor),
       month,
     };
-    generateRecommendation(ctx).then((text) => {
-      if (!cancelled) setAiRecommendation(text);
-    });
+    generateRecommendation(ctx)
+      .then((text) => {
+        if (!cancelled) setAiRecommendation(text);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -323,6 +325,12 @@ export function Dashboard() {
       estresHidrico: c?.agriculturalIndex?.moistureStressIndex ?? 0,
     };
   }, [realtime, cropInfo, muni, crop]);
+
+  const dynamicRisk = useMemo(
+    () =>
+      realtime.viability ? { level: metrics.risk, score: realtime.viability.score } : undefined,
+    [realtime.viability, metrics.risk],
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -469,57 +477,61 @@ export function Dashboard() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl bg-gradient-to-br from-primary/10 via-card to-sky/10">
-              <CardContent className="pt-6">
-                <p className="text-xs font-medium uppercase tracking-wider text-primary">
-                  Recomendación
-                </p>
-                {realtime.viability ? (
-                  <div className="mt-2 space-y-2">
-                    {aiRecommendation ? (
-                      <p className="text-sm leading-relaxed text-foreground">{aiRecommendation}</p>
-                    ) : realtime.loading ? null : (
-                      <p className="text-sm leading-relaxed text-foreground">
-                        {realtime.viability.score >= 70 ? (
-                          <>
-                            Condiciones favorables para <b>{cropInfo.label}</b> en{" "}
-                            <b>{muni?.name}</b>. Ventana óptima de siembra: <b>{cropInfo.window}</b>
-                            .
-                          </>
-                        ) : realtime.viability.score >= 50 ? (
-                          <>
-                            Riesgo moderado para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>.
-                            Revise los factores antes de sembrar.
-                          </>
-                        ) : (
-                          <>
-                            Alto riesgo para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>.
-                            Considere cultivos alternativos.
-                          </>
-                        )}
-                      </p>
-                    )}
-                    {realtime.viability.recommendations.length > 0 && (
-                      <ul className="space-y-1">
-                        {realtime.viability.recommendations.slice(0, 3).map((rec, i) => (
-                          <li
-                            key={i}
-                            className="flex items-start gap-1.5 text-xs text-muted-foreground"
-                          >
-                            <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
-                            {rec}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    Seleccione un municipio y cultivo para ver recomendaciones.
+            <SectionErrorBoundary sectionName="Recomendación">
+              <Card className="rounded-2xl bg-gradient-to-br from-primary/10 via-card to-sky/10">
+                <CardContent className="pt-6">
+                  <p className="text-xs font-medium uppercase tracking-wider text-primary">
+                    Recomendación
                   </p>
-                )}
-              </CardContent>
-            </Card>
+                  {realtime.viability ? (
+                    <div className="mt-2 space-y-2">
+                      {aiRecommendation ? (
+                        <p className="text-sm leading-relaxed text-foreground">
+                          {aiRecommendation}
+                        </p>
+                      ) : realtime.loading ? null : (
+                        <p className="text-sm leading-relaxed text-foreground">
+                          {realtime.viability.score >= 70 ? (
+                            <>
+                              Condiciones favorables para <b>{cropInfo.label}</b> en{" "}
+                              <b>{muni?.name}</b>. Ventana óptima de siembra:{" "}
+                              <b>{cropInfo.window}</b>.
+                            </>
+                          ) : realtime.viability.score >= 50 ? (
+                            <>
+                              Riesgo moderado para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>.
+                              Revise los factores antes de sembrar.
+                            </>
+                          ) : (
+                            <>
+                              Alto riesgo para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>.
+                              Considere cultivos alternativos.
+                            </>
+                          )}
+                        </p>
+                      )}
+                      {realtime.viability.recommendations.length > 0 && (
+                        <ul className="space-y-1">
+                          {realtime.viability.recommendations.slice(0, 3).map((rec, i) => (
+                            <li
+                              key={i}
+                              className="flex items-start gap-1.5 text-xs text-muted-foreground"
+                            >
+                              <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
+                              {rec}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      Seleccione un municipio y cultivo para ver recomendaciones.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </SectionErrorBoundary>
           </aside>
 
           {/* Main content */}
@@ -540,33 +552,35 @@ export function Dashboard() {
             )}
 
             {/* KPIs */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
-              <KpiCard
-                label="Rendimiento estimado"
-                value={metrics.yield}
-                unit="Ton/Ha"
-                trend={realtime.viability ? `${realtime.viability.score} pts` : "Sin datos"}
-                icon={<TrendingUp className="h-5 w-5" />}
-                tone="primary"
-              />
-              <RiskKpiCard risk={metrics.risk} />
-              <KpiCard
-                label="Precipitación esperada"
-                value={String(metrics.precip)}
-                unit="mm / mes"
-                trend="Normal"
-                icon={<Droplets className="h-5 w-5" />}
-                tone="sky"
-              />
-              <KpiCard
-                label="Temperatura promedio"
-                value={metrics.temp}
-                unit="°C"
-                trend={realtime.climate ? "Tiempo real" : "Sin datos"}
-                icon={<Thermometer className="h-5 w-5" />}
-                tone="earth"
-              />
-            </div>
+            <SectionErrorBoundary sectionName="Indicadores clave">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+                <KpiCard
+                  label="Rendimiento estimado"
+                  value={metrics.yield}
+                  unit="Ton/Ha"
+                  trend={realtime.viability ? `${realtime.viability.score} pts` : "Sin datos"}
+                  icon={<TrendingUp className="h-5 w-5" />}
+                  tone="primary"
+                />
+                <RiskKpiCard risk={metrics.risk} />
+                <KpiCard
+                  label="Precipitación esperada"
+                  value={String(metrics.precip)}
+                  unit="mm / mes"
+                  trend="Normal"
+                  icon={<Droplets className="h-5 w-5" />}
+                  tone="sky"
+                />
+                <KpiCard
+                  label="Temperatura promedio"
+                  value={metrics.temp}
+                  unit="°C"
+                  trend={realtime.climate ? "Tiempo real" : "Sin datos"}
+                  icon={<Thermometer className="h-5 w-5" />}
+                  tone="earth"
+                />
+              </div>
+            </SectionErrorBoundary>
 
             {/* Índices agroclimáticos */}
             {realtime.climate && (
@@ -593,78 +607,73 @@ export function Dashboard() {
             )}
 
             {/* Map */}
-            <Card className="overflow-hidden rounded-2xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                <div>
-                  <CardTitle className="text-base font-semibold">
-                    Mapa — {SANTANDER.nombre}
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    Riesgo agroclimático para {cropInfo.label} · {month} {year}
-                    {filteredMunicipios.length < santanderMunis.length && (
-                      <span className="ml-2 text-primary font-medium">
-                        {filteredMunicipios.length} de {santanderMunis.length} municipios
-                      </span>
-                    )}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapLegend />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="rounded-xl text-xs text-muted-foreground hover:text-foreground"
-                    aria-label="Limpiar filtros y selección"
-                    onClick={() => {
-                      setMunicipio(
-                        santanderMunis.find((m) => /vicente/i.test(m.name))?.name ??
-                          santanderMunis[0]?.name ??
-                          "",
-                      );
-                      setCrop("cacao");
-                      setYear(new Date().getFullYear().toString());
-                      setMonth(MONTH_LABELS[new Date().getMonth()]);
-                      setFilters({
-                        altitudeRange: [0, 4000],
-                        tempRange: [10, 35],
-                        precipRange: [0, 4000],
-                        soilType: "all" as SoilType,
-                      });
-                      setShowPrediction(false);
-                    }}
-                  >
-                    Limpiar
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl text-xs"
-                    aria-label="Analizar zona seleccionada"
-                    onClick={() => {
-                      if (muni) setShowPrediction(true);
-                    }}
-                  >
-                    Analizar zona
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <SantanderMap
-                  crop={crop}
-                  selected={muni?.name ?? ""}
-                  onSelect={setMunicipio}
-                  dynamicRisk={
-                    realtime.viability
-                      ? {
-                          level: metrics.risk,
-                          score: realtime.viability.score,
-                        }
-                      : undefined
-                  }
-                  filteredNames={filteredNames}
-                />
-              </CardContent>
-            </Card>
+            <SectionErrorBoundary sectionName="Mapa de riesgo">
+              <Card className="overflow-hidden rounded-2xl">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                  <div>
+                    <CardTitle className="text-base font-semibold">
+                      Mapa — {SANTANDER.nombre}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      Riesgo agroclimático para {cropInfo.label} · {month} {year}
+                      {filteredMunicipios.length < santanderMunis.length && (
+                        <span className="ml-2 text-primary font-medium">
+                          {filteredMunicipios.length} de {santanderMunis.length} municipios
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapLegend />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="rounded-xl text-xs text-muted-foreground hover:text-foreground"
+                      aria-label="Limpiar filtros y selección"
+                      onClick={() => {
+                        setMunicipio(
+                          santanderMunis.find((m) => /vicente/i.test(m.name))?.name ??
+                            santanderMunis[0]?.name ??
+                            "",
+                        );
+                        setCrop("cacao");
+                        setYear(new Date().getFullYear().toString());
+                        setMonth(MONTH_LABELS[new Date().getMonth()]);
+                        setFilters({
+                          altitudeRange: [0, 4000],
+                          tempRange: [10, 35],
+                          precipRange: [0, 4000],
+                          soilType: "all" as SoilType,
+                        });
+                        setShowPrediction(false);
+                      }}
+                    >
+                      Limpiar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl text-xs"
+                      aria-label="Analizar zona seleccionada"
+                      onClick={() => {
+                        if (muni) setShowPrediction(true);
+                      }}
+                    >
+                      Analizar zona
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <SantanderMap
+                    crop={crop}
+                    selected={muni?.name ?? ""}
+                    onSelect={setMunicipio}
+                    dynamicRisk={dynamicRisk}
+                    filteredNames={filteredNames}
+                  />
+                </CardContent>
+              </Card>
+            </SectionErrorBoundary>
 
             {/* Charts */}
             <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-6">

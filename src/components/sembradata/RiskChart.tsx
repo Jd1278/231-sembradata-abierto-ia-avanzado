@@ -30,11 +30,21 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
       if (hasRealData && climate) {
         const monthData = climate.dailyData.filter((d) => new Date(d.date).getMonth() === i);
         if (monthData.length > 0) {
-          const avgPrecip = monthData.reduce((s, d) => s + d.precip, 0) / monthData.length;
-          const avgTemp =
-            monthData.reduce((s, d) => s + (d.tempMax + d.tempMin) / 2, 0) / monthData.length;
-          const avgHum = monthData.reduce((s, d) => s + d.humidity, 0) / monthData.length;
-          const avgWind = monthData.reduce((s, d) => s + d.windSpeed, 0) / monthData.length;
+          let avgPrecip = 0,
+            avgTemp = 0,
+            avgHum = 0,
+            avgWind = 0;
+          for (const d of monthData) {
+            avgPrecip += d.precip;
+            avgTemp += (d.tempMax + d.tempMin) / 2;
+            avgHum += d.humidity;
+            avgWind += d.windSpeed;
+          }
+          const n = monthData.length;
+          avgPrecip /= n;
+          avgTemp /= n;
+          avgHum /= n;
+          avgWind /= n;
           const droughtRisk = Math.round(
             Math.min(
               100,
