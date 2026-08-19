@@ -209,7 +209,11 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
         {hoverIdx != null && (
           <g>
             <rect
-              x={PAD.left + hoverIdx * barGroupW + 2}
+              x={
+                hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 115 > W
+                  ? hoverIdx * barGroupW + PAD.left - 118
+                  : hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 2
+              }
               y={PAD.top - 2}
               width={110}
               height={56}
@@ -219,7 +223,11 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
               strokeWidth={1}
             />
             <text
-              x={PAD.left + hoverIdx * barGroupW + 8}
+              x={
+                hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 115 > W
+                  ? hoverIdx * barGroupW + PAD.left - 112
+                  : hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 8
+              }
               y={PAD.top + 12}
               fontSize={12}
               fill="var(--foreground)"
@@ -230,13 +238,21 @@ export const RiskChart = memo(function RiskChart({ factor, climate, viability }:
             {SERIES.map((s, j) => (
               <g key={s}>
                 <circle
-                  cx={PAD.left + hoverIdx * barGroupW + 12}
+                  cx={
+                    hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 115 > W
+                      ? hoverIdx * barGroupW + PAD.left - 108
+                      : hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 12
+                  }
                   cy={PAD.top + 24 + j * 13}
                   r={3}
                   fill={COLORS[s]}
                 />
                 <text
-                  x={PAD.left + hoverIdx * barGroupW + 20}
+                  x={
+                    hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 115 > W
+                      ? hoverIdx * barGroupW + PAD.left - 100
+                      : hoverIdx * barGroupW + PAD.left + barGroupW / 2 + 20
+                  }
                   y={PAD.top + 28 + j * 13}
                   fontSize={11}
                   fill="var(--muted-foreground)"

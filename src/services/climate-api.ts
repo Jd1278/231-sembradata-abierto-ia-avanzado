@@ -265,7 +265,7 @@ export async function fetchCurrentClimate(
     precipitation: current.precipitation ?? avgPrecip,
     windSpeed: current.wind_speed_10m ?? 0,
     windDirection: current.wind_direction_10m ?? 0,
-    solarRadiation: current.shortwave_radiation ?? avgSolarRad,
+    solarRadiation: avgSolarRad,
     uvIndex: current.uv_index ?? 0,
     cloudCover: current.cloud_cover ?? 0,
     pressure: current.surface_pressure ?? 1013,

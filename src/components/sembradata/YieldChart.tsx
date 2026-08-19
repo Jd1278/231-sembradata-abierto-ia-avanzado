@@ -93,6 +93,7 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
 
   const hover = hoverIdx != null ? data[hoverIdx] : null;
   const hoverX = hoverIdx != null ? xScale(hoverIdx) : 0;
+  const tooltipFlip = hoverX + 115 > W;
 
   return (
     <div
@@ -222,7 +223,7 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
         {hover && hoverIdx != null && (
           <g>
             <rect
-              x={hoverX + 6}
+              x={tooltipFlip ? hoverX - 111 : hoverX + 6}
               y={PAD.top - 4}
               width={105}
               height={42}
@@ -232,7 +233,7 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
               strokeWidth={1}
             />
             <text
-              x={hoverX + 12}
+              x={tooltipFlip ? hoverX - 105 : hoverX + 12}
               y={PAD.top + 12}
               fontSize={10}
               fill="var(--foreground)"
@@ -241,13 +242,18 @@ export const YieldChart = memo(function YieldChart({ crop, factor, viabilityScor
               {data[hoverIdx].year}
             </text>
             {hover.hist != null && (
-              <text x={hoverX + 12} y={PAD.top + 24} fontSize={9} fill="var(--primary)">
+              <text
+                x={tooltipFlip ? hoverX - 105 : hoverX + 12}
+                y={PAD.top + 24}
+                fontSize={9}
+                fill="var(--primary)"
+              >
                 Hist: {hover.hist.toFixed(2)} t/ha
               </text>
             )}
             {hover.pred != null && (
               <text
-                x={hoverX + 12}
+                x={tooltipFlip ? hoverX - 105 : hoverX + 12}
                 y={hover.hist != null ? PAD.top + 34 : PAD.top + 24}
                 fontSize={9}
                 fill="var(--sky)"

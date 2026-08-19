@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SoilType } from "@/types/crops";
@@ -91,6 +91,10 @@ export function AdvancedFilters({
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<AdvancedFilterValues>(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
   const hasChanges =
     draft.altitudeRange[0] !== value.altitudeRange[0] ||
     draft.altitudeRange[1] !== value.altitudeRange[1] ||

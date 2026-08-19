@@ -412,7 +412,13 @@ export function Dashboard() {
                       value={year}
                       onValueChange={(v) => {
                         setYear(v);
-                        if (Number(v) < Number(year)) setMonth("Ene");
+                        const sy = Number(v);
+                        const cy = new Date().getFullYear();
+                        if (sy < cy) {
+                          setMonth("Ene");
+                        } else if (sy === cy) {
+                          setMonth(MONTH_LABELS[new Date().getMonth()]);
+                        }
                       }}
                     >
                       <SelectTrigger className="rounded-xl" aria-label="Seleccionar año">

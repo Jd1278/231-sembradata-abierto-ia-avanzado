@@ -527,7 +527,7 @@ export function evaluateViability(
 
   // ---- Precipitation ----
   const [pMin, pMax] = profile.precipRange;
-  const annualPrecip = precipitation * 12;
+  const annualPrecip = precipitation * 365;
   const precipOk = annualPrecip >= pMin && annualPrecip <= pMax;
   const precipScore = precipOk
     ? 1.0
@@ -536,7 +536,7 @@ export function evaluateViability(
       : Math.max(0, 1 - (annualPrecip - pMax) / (pMax * 0.5));
   factors.push({
     variable: "Precipitación",
-    value: `${precipitation.toFixed(0)} mm/mes (~${Math.round(annualPrecip)} mm/año)`,
+    value: `${precipitation.toFixed(1)} mm/día (~${Math.round(annualPrecip)} mm/año)`,
     status: precipOk ? "favorable" : precipScore > 0.6 ? "neutral" : "unfavorable",
     impact: annualPrecip < pMin * 0.6 || annualPrecip > pMax * 1.3 ? "alto" : "medio",
     explanation: precipOk
@@ -604,14 +604,14 @@ export function evaluateViability(
   weightedScore += windScore * profile.weights.wind;
   totalWeight += profile.weights.wind;
 
-  // ---- Solar radiation ----
-  const solarOk = solarRadiation > 15;
-  const solarScore = solarOk ? 1.0 : Math.max(0, solarRadiation / 15);
+  // ---- Solar radiation (MJ/m²/day) ----
+  const solarOk = solarRadiation > 12;
+  const solarScore = solarOk ? 1.0 : Math.max(0, solarRadiation / 12);
   factors.push({
     variable: "Radiación solar",
-    value: `${solarRadiation.toFixed(0)} W/m²`,
-    status: solarOk ? "favorable" : "neutral",
-    impact: "bajo",
+    value: `${solarRadiation.toFixed(1)} MJ/m²/día`,
+    status: solarOk ? "favorable" : solarScore > 0.5 ? "neutral" : "unfavorable",
+    impact: solarRadiation < 8 ? "alto" : "bajo",
     explanation: solarOk
       ? "Radiación solar suficiente para fotosíntesis productiva."
       : "Radiación solar baja, puede limitar la productividad.",

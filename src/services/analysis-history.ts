@@ -40,6 +40,8 @@ export async function saveAnalysis(
       score: viability.score,
       viable: viability.viable,
       recommendations: viability.recommendations,
+      confidence: viability.confidence,
+      pest_risk_level: viability.pestRisk.level,
     });
     if (error) throw error;
     return true;

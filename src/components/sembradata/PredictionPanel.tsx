@@ -123,12 +123,20 @@ export function PredictionPanel({
 
         // Fetch soil and climate data in parallel
         const pastDays = getOptimalPastDays(crop);
-        const [soilData, climateData] = await Promise.all([
+        const [soilResult, climateResult] = await Promise.allSettled([
           fetchSoilData(lat, lng),
           fetchCurrentClimate(lat, lng, pastDays),
         ]);
 
         if (cancelled) return;
+
+        const soilData = soilResult.status === "fulfilled" ? soilResult.value : null;
+        const climateData = climateResult.status === "fulfilled" ? climateResult.value : null;
+
+        if (!climateData) {
+          if (!cancelled) setError("Error al cargar datos climáticos");
+          return;
+        }
 
         setSoil(soilData);
         setClimate(climateData);
@@ -138,9 +146,9 @@ export function PredictionPanel({
 
         const v = evaluateViability(
           crop,
-          soilData.ph,
-          soilData.organicMatter,
-          soilData.texture,
+          soilData?.ph ?? 6.5,
+          soilData?.organicMatter ?? 3.0,
+          soilData?.texture ?? "Franco",
           climateData.temperature,
           climateData.precipitation,
           climateData.humidity,

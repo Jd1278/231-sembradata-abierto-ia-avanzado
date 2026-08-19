@@ -124,7 +124,7 @@ serve(async (req) => {
 
   try {
     const { message, sessionId }: ChatRequest = await req.json();
-    const sid = sessionId ?? crypto.randomUUID();
+    const sid = sessionId || crypto.randomUUID();
 
     await saveMessage(sid, { role: "user", content: message });
     const history = await getHistory(sid, 10);

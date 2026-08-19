@@ -14,7 +14,7 @@ export interface NasaPowerDaily {
   evapotranspiration: number;
   wetBulbTemp: number;
   earthSkinTemp: number;
-  albedo: number;
+  clearnessIndex: number;
   cloudOpacity: number;
   referenceEvapotranspiration: number;
 }
@@ -175,9 +175,9 @@ export async function fetchNasaPowerData(
       evapotranspiration: r.evapotranspiracion,
       wetBulbTemp: 0,
       earthSkinTemp: 0,
-      albedo: 0,
+      clearnessIndex: 0,
       cloudOpacity: 0,
-      referenceEvapotranspiration: 0,
+      referenceEvapotranspiration: r.evapotranspiracion,
     }));
     return buildSummary(lat, lng, startDate, endDate, daily);
   }
@@ -222,18 +222,9 @@ export async function fetchNasaPowerData(
     evapotranspiration: props.EVPTRNS?.[d] ?? 0,
     wetBulbTemp: props.T2MDEW?.[d] ?? 0,
     earthSkinTemp: props.TS?.[d] ?? 0,
-    albedo: props.ALLSKY_KT?.[d] ?? 0,
+    clearnessIndex: props.ALLSKY_KT?.[d] ?? 0,
     cloudOpacity: props.ALLSKY_SFC_LW_DWN?.[d] ?? 0,
-    referenceEvapotranspiration:
-      (props.T2M_MAX?.[d] ?? 0) > 0
-        ? Math.max(
-            0,
-            (((props.T2M_MAX?.[d] ?? 0) + (props.T2M_MIN?.[d] ?? 0)) / 2) *
-              0.0023 *
-              (props.T2M_MAX?.[d] ?? 0) -
-              (props.T2M_MIN?.[d] ?? 0) * 0.402,
-          )
-        : 0,
+    referenceEvapotranspiration: props.PET?.[d] ?? 0,
   }));
 
   const cacheRows: NasaPowerCacheRow[] = daily.map((d) => ({
