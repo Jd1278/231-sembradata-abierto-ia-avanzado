@@ -189,26 +189,32 @@ function computeAgriculturalIndices(
     return sum + Math.max(0, avg - 10);
   }, 0);
 
-  // Hargreaves PET estimation (mm/day) per day, then sum
-  // Ra ≈ 15 mm/day for Santander (~6°N latitude)
-  const Ra = 15;
+  // Hargreaves PET (mm/day)
+  // Ra = extraterrestrial radiation in mm/day for the latitude.
+  // For Santander, Colombia (~6.5°N): Ra ≈ 4.5 mm/day (annual avg)
+  const Ra = 4.5;
   let totalPet = 0;
   for (const d of dailyData) {
     const tMean = (d.tempMax + d.tempMin) / 2;
-    const tRange = Math.max(0, d.tempMax - d.tempMin);
+    const tRange = Math.max(0.1, d.tempMax - d.tempMin);
     totalPet += 0.0023 * Math.sqrt(tRange) * (tMean + 17.8) * Ra;
   }
   const totalPrecip = dailyData.reduce((sum, d) => sum + d.precip, 0);
-  const days = dailyData.length || 1;
   const monthlyPrecip = avgPrecip * 30;
 
-  // Aridity index: P/PET ratio — higher = more humid
-  // 0 = hyper-arid, 0.3 = arid, 0.5 = semi-arid, 0.75 = sub-humid, 1+ = humid
+  // Aridity index (De Martonne-inspired): P/PET
+  // < 0.3 = árido, 0.3–0.5 = semi-árido, 0.5–0.75 = semi-húmedo, 0.75–1 = sub-húmedo, > 1 = húmedo
   const ratio = totalPet > 0 ? totalPrecip / totalPet : totalPrecip > 0 ? 2 : 0;
 
-  // Moisture stress: 0 = no stress (rain ≥ PET), up to 1 = severe deficit
-  const deficit = Math.max(0, totalPet - totalPrecip);
-  const moistureStress = totalPet > 0 ? Math.min(1, deficit / totalPet) : 0;
+  // Moisture stress: fraction of days where PET > precip (dry days)
+  let dryDays = 0;
+  for (const d of dailyData) {
+    const tMean = (d.tempMax + d.tempMin) / 2;
+    const tRange = Math.max(0.1, d.tempMax - d.tempMin);
+    const dailyPet = 0.0023 * Math.sqrt(tRange) * (tMean + 17.8) * Ra;
+    if (d.precip < dailyPet * 0.5) dryDays++;
+  }
+  const moistureStress = dailyData.length > 0 ? dryDays / dailyData.length : 0;
 
   return {
     GrowingDegreeDays: +gdd.toFixed(1),

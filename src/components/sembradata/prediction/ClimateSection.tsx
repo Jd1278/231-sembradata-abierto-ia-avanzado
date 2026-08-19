@@ -26,9 +26,9 @@ export function ClimateSection({ climate }: Props) {
             detail="Promedio"
           />
           <ClimateMetric
-            label="Precipitación"
-            value={`${climate.precipitation.toFixed(1)} mm`}
-            detail="Actual"
+            label="Precipitación promedio"
+            value={`${climate.precipitation.toFixed(1)} mm/día`}
+            detail={`Total: ${(climate.precipitation * 30).toFixed(0)} mm/mes`}
           />
           <ClimateMetric
             label="Viento"
