@@ -209,23 +209,25 @@ export async function fetchNasaPowerData(
       )
     : [];
 
-  const daily: NasaPowerDaily[] = dates.map((d) => ({
-    date: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`,
-    tempAvg: props.T2M?.[d] ?? 0,
-    tempMax: props.T2M_MAX?.[d] ?? 0,
-    tempMin: props.T2M_MIN?.[d] ?? 0,
-    precipitation: props.PRECTOTCORR?.[d] ?? 0,
-    humidity: props.RH2M?.[d] ?? 0,
-    windSpeed: props.WS2M?.[d] ?? 0,
-    solarRadiation: props.ALLSKY_SFC_SW_DWN?.[d] ?? 0,
-    windDirection: props.WD2M?.[d] ?? 0,
-    evapotranspiration: props.EVPTRNS?.[d] ?? 0,
-    wetBulbTemp: props.T2MDEW?.[d] ?? 0,
-    earthSkinTemp: props.TS?.[d] ?? 0,
-    clearnessIndex: props.ALLSKY_KT?.[d] ?? 0,
-    cloudOpacity: props.ALLSKY_SFC_LW_DWN?.[d] ?? 0,
-    referenceEvapotranspiration: props.PET?.[d] ?? 0,
-  }));
+  const daily: NasaPowerDaily[] = dates
+    .filter((d) => props.T2M?.[d] !== -999 && props.T2M?.[d] !== undefined)
+    .map((d) => ({
+      date: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`,
+      tempAvg: props.T2M?.[d] ?? 0,
+      tempMax: props.T2M_MAX?.[d] ?? 0,
+      tempMin: props.T2M_MIN?.[d] ?? 0,
+      precipitation: props.PRECTOTCORR?.[d] ?? 0,
+      humidity: props.RH2M?.[d] ?? 0,
+      windSpeed: props.WS2M?.[d] ?? 0,
+      solarRadiation: props.ALLSKY_SFC_SW_DWN?.[d] ?? 0,
+      windDirection: props.WD2M?.[d] ?? 0,
+      evapotranspiration: props.EVPTRNS?.[d] ?? 0,
+      wetBulbTemp: props.T2MDEW?.[d] ?? 0,
+      earthSkinTemp: props.TS?.[d] ?? 0,
+      clearnessIndex: props.ALLSKY_KT?.[d] ?? 0,
+      cloudOpacity: props.ALLSKY_SFC_LW_DWN?.[d] ?? 0,
+      referenceEvapotranspiration: props.PET?.[d] ?? 0,
+    }));
 
   const cacheRows: NasaPowerCacheRow[] = daily.map((d) => ({
     lat,

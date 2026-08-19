@@ -449,9 +449,13 @@ export function Dashboard() {
                       <SelectContent>
                         {MONTH_LABELS.slice(
                           0,
-                          Number(year) === new Date().getFullYear()
-                            ? new Date().getMonth() + 1
-                            : 12,
+                          (() => {
+                            const sy = Number(year);
+                            const cy = new Date().getFullYear();
+                            if (sy === cy) return new Date().getMonth() + 1;
+                            if (sy > cy) return 0;
+                            return 12;
+                          })(),
                         ).map((m) => (
                           <SelectItem key={m} value={m}>
                             {m}

@@ -24,40 +24,40 @@ export function HistoricalValidation({ lat, lng, forecastTemps, forecastPrecip, 
   const [loading, setLoading] = useState(!historical);
   const [isStale, setIsStale] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    const cached = getOffline<NasaPowerDaily[]>(CACHE_KEY(lat, lng));
-    if (cached) {
-      setHistorical(cached);
-      setIsStale(true);
-    }
+  const fetchData = useCallback(
+    async (signal?: AbortSignal) => {
+      const cached = getOffline<NasaPowerDaily[]>(CACHE_KEY(lat, lng));
+      if (cached) {
+        setHistorical(cached);
+        setIsStale(true);
+      }
 
-    if (!navigator.onLine) {
-      setLoading(false);
-      return;
-    }
+      if (!navigator.onLine) {
+        setLoading(false);
+        return;
+      }
 
-    try {
-      const pastDays = crop ? getOptimalPastDays(crop) : 90;
-      const data = await fetchNasaPowerRecent(lat, lng, pastDays);
-      const daily = data.daily.slice(-Math.min(30, pastDays));
-      setHistorical(daily);
-      setIsStale(false);
-      saveOffline(CACHE_KEY(lat, lng), daily);
-    } catch {
-      if (!cached) setHistorical(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [lat, lng, crop]);
+      try {
+        const pastDays = crop ? getOptimalPastDays(crop) : 90;
+        const data = await fetchNasaPowerRecent(lat, lng, pastDays);
+        if (signal?.aborted) return;
+        const daily = data.daily.slice(-Math.min(30, pastDays));
+        setHistorical(daily);
+        setIsStale(false);
+        saveOffline(CACHE_KEY(lat, lng), daily);
+      } catch {
+        if (!cached && !signal?.aborted) setHistorical(null);
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+      }
+    },
+    [lat, lng, crop],
+  );
 
   useEffect(() => {
-    let cancelled = false;
-    fetchData().then(() => {
-      if (cancelled) return;
-    });
-    return () => {
-      cancelled = true;
-    };
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
   }, [fetchData]);
 
   if (loading) return <HistoricalSkeleton />;

@@ -8,14 +8,14 @@ export type Intent =
 
 export interface RealTimeData {
   clima: {
-    current: { temperature_2m: number; relative_humidity_2m: number };
-    daily: {
+    current?: { temperature_2m: number; relative_humidity_2m: number };
+    daily?: {
       temperature_2m_min: number[];
       temperature_2m_max: number[];
       precipitation_sum: number[];
     };
-  };
-  suelo: { ph: number; textura: string };
+  } | null;
+  suelo: { ph: number; textura: string } | null;
 }
 
 export function classifyIntent(msg: string): Intent {
@@ -72,15 +72,32 @@ export function classifyIntent(msg: string): Intent {
 const SYSTEM_PREAMBLE = `Eres un agrónomo experto en Santander, Colombia. Responde en español, sé conciso (<300 palabras), usa emojis.`;
 
 function fmtClima(municipio: string, data: RealTimeData): string {
-  const precip7d = data.clima.daily.precipitation_sum.reduce((a: number, b: number) => a + b, 0);
-  return [
-    `### Datos reales de ${municipio} (Open-Meteo + SoilGrids)`,
-    `- Temp actual: ${data.clima.current.temperature_2m}°C (rango ${data.clima.daily.temperature_2m_min[0]}-${data.clima.daily.temperature_2m_max[0]}°C)`,
-    `- Precip 7d: ${precip7d} mm`,
-    `- Humedad: ${data.clima.current.relative_humidity_2m}%`,
-    `- pH suelo: ${data.suelo.ph}`,
-    `- Textura: ${data.suelo.textura}`,
-  ].join("\n");
+  const lines = [`### Datos reales de ${municipio}`];
+  if (data.clima) {
+    const precip7d = (data.clima.daily?.precipitation_sum ?? []).reduce(
+      (a: number, b: number) => a + b,
+      0,
+    );
+    const tempMin = data.clima.daily?.temperature_2m_min?.[0];
+    const tempMax = data.clima.daily?.temperature_2m_max?.[0];
+    lines.push(
+      `- Open-Meteo:`,
+      `  - Temp actual: ${data.clima.current?.temperature_2m ?? "N/A"}°C${tempMin != null && tempMax != null ? ` (rango ${tempMin}-${tempMax}°C)` : ""}`,
+      `  - Precip 7d: ${precip7d} mm`,
+      `  - Humedad: ${data.clima.current?.relative_humidity_2m ?? "N/A"}%`,
+    );
+  }
+  if (data.suelo) {
+    lines.push(
+      `- SoilGrids:`,
+      `  - pH suelo: ${data.suelo.ph ?? "N/A"}`,
+      `  - Textura: ${data.suelo.textura ?? "N/A"}`,
+    );
+  }
+  if (!data.clima && !data.suelo) {
+    lines.push("(Datos climáticos no disponibles)");
+  }
+  return lines.join("\n");
 }
 
 export function buildSystemPrompt(

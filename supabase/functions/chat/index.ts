@@ -141,8 +141,9 @@ serve(async (req) => {
     }
     const sid = sessionId || crypto.randomUUID();
 
-    await saveMessage(sid, { role: "user", content: message });
+    const saveOk = await saveMessage(sid, { role: "user", content: message });
     const history = await getHistory(sid, 10);
+    if (!saveOk) history.unshift({ role: "user", content: message });
 
     const intent: Intent = classifyIntent(message);
 
@@ -185,7 +186,7 @@ serve(async (req) => {
       suelo = s;
     }
 
-    const realTimeData = clima && suelo ? { clima, suelo } : null;
+    const realTimeData = clima || suelo ? { clima: clima ?? null, suelo: suelo ?? null } : null;
 
     const systemPrompt = buildSystemPrompt(
       intent === "UNKNOWN" ? "GENERAL" : intent,

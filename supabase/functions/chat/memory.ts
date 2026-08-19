@@ -11,7 +11,7 @@ export interface ChatMessage {
   metadata?: Record<string, unknown>;
 }
 
-export async function saveMessage(sessionId: string, message: ChatMessage): Promise<void> {
+export async function saveMessage(sessionId: string, message: ChatMessage): Promise<boolean> {
   const { error } = await supabase.from("chat_conversations").insert({
     session_id: sessionId,
     role: message.role,
@@ -20,7 +20,9 @@ export async function saveMessage(sessionId: string, message: ChatMessage): Prom
   });
   if (error) {
     console.error("Error saving message:", error);
+    return false;
   }
+  return true;
 }
 
 export async function getHistory(sessionId: string, limit = 10): Promise<ChatMessage[]> {

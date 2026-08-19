@@ -121,7 +121,7 @@ export function ChatbotPanel({ municipio, crop }: { municipio?: string; crop?: s
         {
           id: Date.now() + 1,
           role: "assistant",
-          text: data.reply,
+          text: data.reply ?? "Lo siento, no pude generar una respuesta.",
           metadata: data.data
             ? { municipio: data.data.municipio, sources: data.data.sources, intent: data.intent }
             : undefined,

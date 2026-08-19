@@ -91,11 +91,11 @@ interface CropProfile {
 const CROP_PROFILES: Record<CropKey, CropProfile> = {
   cacao: {
     label: "Cacao",
-    phRange: [5.0, 7.0],
-    tempRange: [20, 28],
+    phRange: [6.0, 7.5],
+    tempRange: [21, 32],
     precipRange: [1500, 2500],
     humRange: [70, 90],
-    altRange: [0, 1500],
+    altRange: [0, 800],
     weights: {
       ph: 12,
       temp: 15,
@@ -110,7 +110,7 @@ const CROP_PROFILES: Record<CropKey, CropProfile> = {
     pestConditions: {
       fungalHumidityThreshold: 80,
       fungalTempRange: [22, 28],
-      droughtPrecipThreshold: 60,
+      droughtPrecipThreshold: 2,
       frostTempThreshold: 10,
     },
     seasonalStages: [
@@ -131,8 +131,8 @@ const CROP_PROFILES: Record<CropKey, CropProfile> = {
   cafe: {
     label: "Café",
     phRange: [5.5, 6.5],
-    tempRange: [17, 24],
-    precipRange: [1500, 2200],
+    tempRange: [18, 22],
+    precipRange: [1500, 2000],
     humRange: [60, 80],
     altRange: [1200, 1800],
     weights: {
@@ -149,7 +149,7 @@ const CROP_PROFILES: Record<CropKey, CropProfile> = {
     pestConditions: {
       fungalHumidityThreshold: 75,
       fungalTempRange: [18, 24],
-      droughtPrecipThreshold: 80,
+      droughtPrecipThreshold: 3,
       frostTempThreshold: 5,
     },
     seasonalStages: [
@@ -169,11 +169,11 @@ const CROP_PROFILES: Record<CropKey, CropProfile> = {
   },
   granadilla: {
     label: "Granadilla",
-    phRange: [5.5, 6.5],
-    tempRange: [18, 24],
-    precipRange: [1200, 2000],
+    phRange: [5.5, 6.8],
+    tempRange: [15, 20],
+    precipRange: [1000, 2000],
     humRange: [65, 85],
-    altRange: [1200, 2000],
+    altRange: [1800, 2800],
     weights: {
       ph: 10,
       temp: 13,
@@ -188,7 +188,7 @@ const CROP_PROFILES: Record<CropKey, CropProfile> = {
     pestConditions: {
       fungalHumidityThreshold: 78,
       fungalTempRange: [20, 26],
-      droughtPrecipThreshold: 70,
+      droughtPrecipThreshold: 2.3,
       frostTempThreshold: 8,
     },
     seasonalStages: [
@@ -570,7 +570,7 @@ export function evaluateViability(
     variable: "Humedad relativa",
     value: `${humidity.toFixed(0)}%`,
     status: humOk ? "favorable" : humScore > 0.6 ? "neutral" : "unfavorable",
-    impact: "bajo",
+    impact: Math.abs(humidity - (hMin + hMax) / 2) > 20 ? "alto" : "medio",
     explanation: humOk
       ? `Humedad ${humidity.toFixed(0)}% adecuada para el cultivo.`
       : `Humedad ${humidity.toFixed(0)}% fuera del rango ideal (${hMin}-${hMax}%).`,

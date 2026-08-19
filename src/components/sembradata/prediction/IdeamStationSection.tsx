@@ -24,43 +24,42 @@ export function IdeamStationSection({ lat, lng, departamento }: Props) {
   const [loading, setLoading] = useState(true);
   const [isStale, setIsStale] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    const cached = getOffline<IdeamCache>(CACHE_KEY(lat, lng));
-    if (cached) {
-      setStation(cached.station);
-      setObservations(cached.observations);
-      setIsStale(true);
-      setLoading(false);
-    }
-
-    if (!navigator.onLine) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const result = await fetchIdeamForLocation(lat, lng, departamento, 30);
-      if (result) {
-        setStation(result.station);
-        setObservations(result.observations);
-        setIsStale(false);
-        saveOffline(CACHE_KEY(lat, lng), result);
+  const fetchData = useCallback(
+    async (signal?: AbortSignal) => {
+      const cached = getOffline<IdeamCache>(CACHE_KEY(lat, lng));
+      if (cached) {
+        setStation(cached.station);
+        setObservations(cached.observations);
+        setIsStale(true);
+        setLoading(false);
       }
-    } catch {
-      if (!cached) setStation(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [lat, lng, departamento]);
+
+      if (!navigator.onLine) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const result = await fetchIdeamForLocation(lat, lng, departamento, 30);
+        if (result && !signal?.aborted) {
+          setStation(result.station);
+          setObservations(result.observations);
+          setIsStale(false);
+          saveOffline(CACHE_KEY(lat, lng), result);
+        }
+      } catch {
+        if (!cached && !signal?.aborted) setStation(null);
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+      }
+    },
+    [lat, lng, departamento],
+  );
 
   useEffect(() => {
-    let cancelled = false;
-    fetchData().then(() => {
-      if (cancelled) return;
-    });
-    return () => {
-      cancelled = true;
-    };
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
   }, [fetchData]);
 
   if (loading) return <IdeamSkeleton />;

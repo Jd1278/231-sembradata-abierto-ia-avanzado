@@ -329,17 +329,27 @@ export const SantanderMap = memo(function SantanderMap({
                 <p
                   className={cn(
                     "flex items-center gap-1.5 text-sm font-semibold",
-                    RISK_TEXT[dynamicRisk ? dynamicRisk.level : activeFeature.risk[crop]],
+                    RISK_TEXT[
+                      activeFeature.name === selected && dynamicRisk
+                        ? dynamicRisk.level
+                        : activeFeature.risk[crop]
+                    ],
                   )}
                 >
                   <span
                     className={cn(
                       "h-2 w-2 rounded-full",
-                      RISK_DOT[dynamicRisk ? dynamicRisk.level : activeFeature.risk[crop]],
+                      RISK_DOT[
+                        activeFeature.name === selected && dynamicRisk
+                          ? dynamicRisk.level
+                          : activeFeature.risk[crop]
+                      ],
                     )}
                   />
-                  {dynamicRisk ? dynamicRisk.level : activeFeature.risk[crop]}
-                  {dynamicRisk && (
+                  {activeFeature.name === selected && dynamicRisk
+                    ? dynamicRisk.level
+                    : activeFeature.risk[crop]}
+                  {dynamicRisk && activeFeature.name === selected && (
                     <span className="text-[10px] text-muted-foreground font-normal ml-1">
                       ({dynamicRisk.score} pts)
                     </span>

@@ -8,7 +8,7 @@ const CAFE_OPTIMAL = {
   soilOrganicMatter: 3.0,
   soilTexture: "Franco",
   temperature: 20,
-  precipitation: 160,
+  precipitation: 5,
   humidity: 70,
   windSpeed: 10,
   solarRadiation: 20,
@@ -23,11 +23,11 @@ const CACAO_OPTIMAL = {
   soilOrganicMatter: 3.5,
   soilTexture: "Franco",
   temperature: 24,
-  precipitation: 180,
+  precipitation: 5,
   humidity: 80,
   windSpeed: 8,
   solarRadiation: 20,
-  altitude: 800,
+  altitude: 400,
   month: 7,
   hasRealData: true,
 };
@@ -37,12 +37,12 @@ const GRANADILLA_OPTIMAL = {
   soilPh: 6.0,
   soilOrganicMatter: 3.0,
   soilTexture: "Franco",
-  temperature: 21,
-  precipitation: 150,
+  temperature: 18,
+  precipitation: 5,
   humidity: 75,
   windSpeed: 10,
   solarRadiation: 20,
-  altitude: 1600,
+  altitude: 2200,
   month: 5,
   hasRealData: true,
 };
@@ -160,7 +160,8 @@ describe("evaluateViability - viability flag", () => {
 describe("evaluateViability - pest risk for extreme conditions", () => {
   it("detects Alto pest risk with high humidity, favorable fungal temps, and drought for cacao", () => {
     // fungal risk (40) + drought stress (25) = 65 → Alto
-    const result = evaluateViability("cacao", 6.0, 3.0, "Franco", 25, 3, 90, 8, 20, 800, 1, true);
+    // precip=1 < droughtThreshold=2 → drought triggers; humidity=90 > 80 → fungal triggers
+    const result = evaluateViability("cacao", 6.0, 3.0, "Franco", 25, 1, 90, 8, 20, 400, 1, true);
     expect(result.pestRisk.level).toBe("Alto");
     expect(result.pestRisk.factors.length).toBeGreaterThan(0);
   });
@@ -173,30 +174,19 @@ describe("evaluateViability - pest risk for extreme conditions", () => {
 
   it("detects Alto pest risk when frost + drought combined", () => {
     // frost (35) + drought (25) = 60, no optimal-reduction (humidity=65 >= 60) → Alto
-    const result = evaluateViability("cafe", 6.0, 3.0, "Franco", 3, 20, 65, 5, 20, 1500, 7, true);
+    // precip=1 < droughtThreshold=3 (cafe) → drought triggers
+    const result = evaluateViability("cafe", 6.0, 3.0, "Franco", 3, 1, 65, 5, 20, 1500, 7, true);
     expect(result.pestRisk.level).toBe("Alto");
   });
 
   it("detects drought-related pest risk", () => {
-    const result = evaluateViability("cafe", 6.0, 3.0, "Franco", 22, 5, 50, 10, 20, 1500, 7, true);
+    // precip=1 < droughtThreshold=3 (cafe) → drought triggers
+    const result = evaluateViability("cafe", 6.0, 3.0, "Franco", 22, 1, 50, 10, 20, 1500, 7, true);
     expect(result.pestRisk.factors.some((f) => f.includes("hídrico"))).toBe(true);
   });
 
   it("returns Bajo pest risk under optimal conditions", () => {
-    const result = evaluateViability(
-      "cafe",
-      6.0,
-      3.0,
-      "Franco",
-      20,
-      160,
-      65,
-      10,
-      25,
-      1500,
-      3,
-      true,
-    );
+    const result = evaluateViability("cafe", 6.0, 3.0, "Franco", 20, 5, 65, 10, 25, 1500, 3, true);
     expect(result.pestRisk.level).toBe("Bajo");
   });
 });
@@ -210,7 +200,7 @@ describe("evaluateViability - crop-specific weights (Café altitude)", () => {
       3.0,
       "Franco",
       20,
-      160,
+      5,
       70,
       10,
       20,
@@ -244,20 +234,8 @@ describe("evaluateViability - soil type matching", () => {
   it("Franco texture is optimal for all crops", () => {
     const crops: CropKey[] = ["cacao", "cafe", "granadilla"];
     for (const crop of crops) {
-      const result = evaluateViability(
-        crop,
-        6.0,
-        3.0,
-        "Franco",
-        22,
-        160,
-        75,
-        10,
-        20,
-        1400,
-        5,
-        true,
-      );
+      const alt = crop === "cacao" ? 400 : crop === "cafe" ? 1500 : 2200;
+      const result = evaluateViability(crop, 6.0, 3.0, "Franco", 22, 5, 75, 10, 20, alt, 5, true);
       const textureFactor = result.factors.find((f) => f.variable === "Textura del suelo")!;
       expect(textureFactor.status).toBe("favorable");
     }
@@ -266,27 +244,15 @@ describe("evaluateViability - soil type matching", () => {
   it("Arena texture is unfavorable for all crops", () => {
     const crops: CropKey[] = ["cacao", "cafe", "granadilla"];
     for (const crop of crops) {
-      const result = evaluateViability(crop, 6.0, 3.0, "Arena", 22, 160, 75, 10, 20, 1400, 5, true);
+      const alt = crop === "cacao" ? 400 : crop === "cafe" ? 1500 : 2200;
+      const result = evaluateViability(crop, 6.0, 3.0, "Arena", 22, 5, 75, 10, 20, alt, 5, true);
       const textureFactor = result.factors.find((f) => f.variable === "Textura del suelo")!;
       expect(textureFactor.status).toBe("unfavorable");
     }
   });
 
   it("Arcilla is neutral for cacao", () => {
-    const result = evaluateViability(
-      "cacao",
-      6.0,
-      3.0,
-      "Arcilla",
-      24,
-      180,
-      80,
-      8,
-      20,
-      800,
-      7,
-      true,
-    );
+    const result = evaluateViability("cacao", 6.0, 3.0, "Arcilla", 24, 5, 80, 8, 20, 400, 7, true);
     const textureFactor = result.factors.find((f) => f.variable === "Textura del suelo")!;
     expect(textureFactor.status).toBe("neutral");
   });
@@ -298,11 +264,11 @@ describe("evaluateViability - soil type matching", () => {
       3.0,
       "TexturaDesconocida",
       24,
-      180,
+      5,
       80,
       8,
       20,
-      800,
+      400,
       7,
       true,
     );
@@ -321,7 +287,7 @@ describe("evaluateViability - seasonal scoring", () => {
         3.0,
         "Franco",
         20,
-        160,
+        5,
         70,
         10,
         20,
@@ -344,7 +310,7 @@ describe("evaluateViability - seasonal scoring", () => {
         1.5,
         "Arcilla",
         20,
-        160,
+        5,
         70,
         10,
         20,
@@ -359,38 +325,12 @@ describe("evaluateViability - seasonal scoring", () => {
   });
 
   it("high-sensitivity month (April for Café = Floración) has a note", () => {
-    const result = evaluateViability(
-      "cafe",
-      6.0,
-      3.0,
-      "Franco",
-      20,
-      160,
-      70,
-      10,
-      20,
-      1500,
-      4,
-      true,
-    );
+    const result = evaluateViability("cafe", 6.0, 3.0, "Franco", 20, 5, 70, 10, 20, 1500, 4, true);
     expect(result.seasonalNote).toContain("Floración");
   });
 
   it("low-sensitivity month (February for Café = Cosecha) has a note", () => {
-    const result = evaluateViability(
-      "cafe",
-      6.0,
-      3.0,
-      "Franco",
-      20,
-      160,
-      70,
-      10,
-      20,
-      1500,
-      2,
-      true,
-    );
+    const result = evaluateViability("cafe", 6.0, 3.0, "Franco", 20, 5, 70, 10, 20, 1500, 2, true);
     expect(result.seasonalNote).toContain("Cosecha");
   });
 });
@@ -403,7 +343,7 @@ describe("evaluateViability - confidence calculation", () => {
       3.0,
       "Franco",
       20,
-      160,
+      5,
       70,
       10,
       20,
@@ -417,7 +357,7 @@ describe("evaluateViability - confidence calculation", () => {
       3.0,
       "Franco",
       20,
-      160,
+      5,
       70,
       10,
       20,
@@ -429,39 +369,13 @@ describe("evaluateViability - confidence calculation", () => {
   });
 
   it("confidence is clamped between 20 and 95", () => {
-    const result = evaluateViability(
-      "cafe",
-      6.0,
-      3.0,
-      "Franco",
-      20,
-      160,
-      70,
-      10,
-      20,
-      1500,
-      5,
-      true,
-    );
+    const result = evaluateViability("cafe", 6.0, 3.0, "Franco", 20, 5, 70, 10, 20, 1500, 5, true);
     expect(result.confidence).toBeGreaterThanOrEqual(20);
     expect(result.confidence).toBeLessThanOrEqual(95);
   });
 
   it("more decisive factors increase confidence", () => {
-    const optimal = evaluateViability(
-      "cafe",
-      6.0,
-      3.0,
-      "Franco",
-      20,
-      160,
-      70,
-      10,
-      20,
-      1500,
-      5,
-      true,
-    );
+    const optimal = evaluateViability("cafe", 6.0, 3.0, "Franco", 20, 5, 70, 10, 20, 1500, 5, true);
     const extreme = evaluateViability("cafe", 9.0, 0.1, "Arena", 40, 5, 10, 50, 5, 500, 1, true);
     expect(extreme.confidence).toBeGreaterThanOrEqual(optimal.confidence);
   });
@@ -515,25 +429,12 @@ describe("evaluateViability - edge cases", () => {
   });
 
   it("always returns exactly 9 factors", () => {
-    const result = evaluateViability("cacao", 6.0, 3.0, "Franco", 24, 180, 80, 8, 20, 800, 7, true);
+    const result = evaluateViability("cacao", 6.0, 3.0, "Franco", 24, 5, 80, 8, 20, 400, 7, true);
     expect(result.factors).toHaveLength(9);
   });
 
   it("each factor has required fields", () => {
-    const result = evaluateViability(
-      "cafe",
-      6.0,
-      3.0,
-      "Franco",
-      20,
-      160,
-      70,
-      10,
-      20,
-      1500,
-      5,
-      true,
-    );
+    const result = evaluateViability("cafe", 6.0, 3.0, "Franco", 20, 5, 70, 10, 20, 1500, 5, true);
     for (const f of result.factors) {
       expect(f.variable).toBeTruthy();
       expect(f.value).toBeTruthy();
@@ -548,20 +449,8 @@ describe("evaluateViability - edge cases", () => {
   it("returns alternatives for each crop", () => {
     const crops: CropKey[] = ["cacao", "cafe", "granadilla"];
     for (const crop of crops) {
-      const result = evaluateViability(
-        crop,
-        6.0,
-        3.0,
-        "Franco",
-        22,
-        160,
-        75,
-        10,
-        20,
-        1400,
-        5,
-        true,
-      );
+      const alt = crop === "cacao" ? 400 : crop === "cafe" ? 1500 : 2200;
+      const result = evaluateViability(crop, 6.0, 3.0, "Franco", 22, 5, 75, 10, 20, alt, 5, true);
       expect(result.alternatives.length).toBeGreaterThan(0);
       for (const alt of result.alternatives) {
         expect(alt.name).toBeTruthy();
@@ -571,77 +460,25 @@ describe("evaluateViability - edge cases", () => {
   });
 
   it("returns recommendations array", () => {
-    const result = evaluateViability(
-      "cafe",
-      6.0,
-      3.0,
-      "Franco",
-      20,
-      160,
-      70,
-      10,
-      20,
-      1500,
-      5,
-      true,
-    );
+    const result = evaluateViability("cafe", 6.0, 3.0, "Franco", 20, 5, 70, 10, 20, 1500, 5, true);
     expect(result.recommendations.length).toBeGreaterThan(0);
   });
 });
 
 describe("evaluateViability - interaction effects", () => {
   it("high temp + low humidity causes severe stress", () => {
-    const result = evaluateViability(
-      "cafe",
-      6.0,
-      3.0,
-      "Franco",
-      30,
-      160,
-      40,
-      10,
-      20,
-      1500,
-      5,
-      true,
-    );
+    const result = evaluateViability("cafe", 6.0, 3.0, "Franco", 30, 5, 40, 10, 20, 1500, 5, true);
     expect(result.factors.length).toBe(9);
     expect(result.score).toBeLessThan(80);
   });
 
   it("wind + high temp causes evapotranspiration stress", () => {
-    const result = evaluateViability(
-      "cafe",
-      6.0,
-      3.0,
-      "Franco",
-      28,
-      160,
-      70,
-      30,
-      20,
-      1500,
-      5,
-      true,
-    );
+    const result = evaluateViability("cafe", 6.0, 3.0, "Franco", 28, 5, 70, 30, 20, 1500, 5, true);
     expect(result.score).toBeLessThan(85);
   });
 
   it("optimal temp + humidity synergy boosts score", () => {
-    const result = evaluateViability(
-      "cafe",
-      6.0,
-      3.0,
-      "Franco",
-      20,
-      160,
-      70,
-      10,
-      20,
-      1500,
-      5,
-      true,
-    );
+    const result = evaluateViability("cafe", 6.0, 3.0, "Franco", 20, 5, 70, 10, 20, 1500, 5, true);
     expect(result.score).toBeGreaterThanOrEqual(70);
   });
 });
