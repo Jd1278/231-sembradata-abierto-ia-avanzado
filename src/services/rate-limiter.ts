@@ -66,6 +66,7 @@ export async function rateLimitedFetch(
   url: string,
   identifier = "global",
   fetchInit?: RequestInit,
+  timeoutMs = 10_000,
 ): Promise<Response> {
   if (!canMakeRequest(service, identifier)) {
     const resetAt = getResetTime(service, identifier);
@@ -73,5 +74,11 @@ export async function rateLimitedFetch(
     throw new Error(`Rate limit exceeded for ${service}. Retry in ${Math.ceil(waitMs / 1000)}s.`);
   }
 
-  return fetch(url, fetchInit);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...fetchInit, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }

@@ -1,13 +1,4 @@
-import {
-  Radar,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  ResponsiveContainer,
-  Legend,
-  Tooltip,
-} from "recharts";
+import { memo, useMemo, useState } from "react";
 
 interface Props {
   temperature: number;
@@ -22,74 +13,204 @@ function normalize(value: number, min: number, max: number) {
   return Math.max(0, Math.min(100, Math.round(((value - min) / (max - min)) * 100)));
 }
 
-function dynamicRange(values: number[], pad = 0.1): [number, number] {
-  if (values.length === 0) return [0, 100];
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const margin = Math.max((max - min) * pad, 1);
-  return [Math.floor(min - margin), Math.ceil(max + margin)];
-}
+const AGRO_RANGES: Record<string, [number, number]> = {
+  temperature: [0, 40],
+  humidity: [0, 100],
+  precipitation: [0, 500],
+  windSpeed: [0, 40],
+  solarRadiation: [0, 30],
+};
 
-export function ClimateRadar({
+const CX = 250;
+const CY = 140;
+const R = 110;
+const RINGS = 5;
+
+export const ClimateRadar = memo(function ClimateRadar({
   temperature,
   humidity,
   precipitation,
   windSpeed,
   solarRadiation,
 }: Props) {
-  const tempRange = dynamicRange([temperature], 0.2);
-  const humRange = dynamicRange([humidity], 0.15);
-  const precRange = dynamicRange([precipitation], 0.2);
-  const windRange = dynamicRange([windSpeed], 0.2);
-  const solarRange = dynamicRange([solarRadiation], 0.2);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
-  const data = [
-    { variable: "Temp", value: normalize(temperature, tempRange[0], tempRange[1]) },
-    { variable: "Humedad", value: normalize(humidity, humRange[0], humRange[1]) },
-    { variable: "Precipitación", value: normalize(precipitation, precRange[0], precRange[1]) },
-    { variable: "Viento", value: normalize(windSpeed, windRange[0], windRange[1]) },
-    { variable: "Radiación", value: normalize(solarRadiation, solarRange[0], solarRange[1]) },
-  ];
+  const data = useMemo(
+    () => [
+      { variable: "Temp", value: normalize(temperature, ...AGRO_RANGES.temperature) },
+      { variable: "Humedad", value: normalize(humidity, ...AGRO_RANGES.humidity) },
+      { variable: "Precipitación", value: normalize(precipitation, ...AGRO_RANGES.precipitation) },
+      { variable: "Viento", value: normalize(windSpeed, ...AGRO_RANGES.windSpeed) },
+      { variable: "Radiación", value: normalize(solarRadiation, ...AGRO_RANGES.solarRadiation) },
+    ],
+    [temperature, humidity, precipitation, windSpeed, solarRadiation],
+  );
+
+  const n = data.length;
+  const angleStep = (2 * Math.PI) / n;
+  const startAngle = -Math.PI / 2;
+
+  const getPoint = (idx: number, radius: number) => {
+    const angle = startAngle + idx * angleStep;
+    return { x: CX + radius * Math.cos(angle), y: CY + radius * Math.sin(angle) };
+  };
+
+  const dataPoints = data.map((d, i) => getPoint(i, (d.value / 100) * R));
 
   return (
-    <div className="h-[300px] w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
-          <PolarGrid stroke="var(--border)" />
-          <PolarAngleAxis
-            dataKey="variable"
-            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-          />
-          <PolarRadiusAxis
-            angle={90}
-            domain={[0, 100]}
-            tickCount={6}
-            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-            axisLine={false}
-          />
-          <Radar
-            name="Clima"
-            dataKey="value"
-            stroke="var(--primary)"
+    <div
+      className="h-[300px] w-full"
+      role="img"
+      aria-label="Radar de variables climáticas: temperatura, humedad, precipitación, viento y radiación"
+    >
+      <svg viewBox="0 0 500 280" className="h-full w-full">
+        <defs>
+          <linearGradient id="radar-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.3} />
+            <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.05} />
+          </linearGradient>
+        </defs>
+
+        {Array.from({ length: RINGS + 1 }, (_, r) => {
+          const radius = (r / RINGS) * R;
+          const pts = Array.from({ length: n }, (_, i) => getPoint(i, radius));
+          return (
+            <polygon
+              key={r}
+              points={pts.map((p) => `${p.x},${p.y}`).join(" ")}
+              fill="none"
+              stroke="var(--border)"
+              strokeWidth={r === RINGS ? 1 : 0.5}
+              strokeDasharray={r === RINGS ? "none" : "2 2"}
+            />
+          );
+        })}
+
+        {data.map((_, i) => {
+          const outer = getPoint(i, R);
+          return (
+            <line
+              key={i}
+              x1={CX}
+              y1={CY}
+              x2={outer.x}
+              y2={outer.y}
+              stroke="var(--border)"
+              strokeWidth={0.5}
+            />
+          );
+        })}
+
+        <polygon
+          points={dataPoints.map((p) => `${p.x},${p.y}`).join(" ")}
+          fill="url(#radar-fill)"
+          stroke="var(--primary)"
+          strokeWidth={2}
+        />
+
+        {dataPoints.map((p, i) => (
+          <circle
+            key={i}
+            cx={p.x}
+            cy={p.y}
+            r={4}
             fill="var(--primary)"
-            fillOpacity={0.25}
+            stroke="var(--background)"
             strokeWidth={2}
-            isAnimationActive={true}
-            animationDuration={1000}
-            animationEasing="ease-out"
           />
-          <Tooltip
-            contentStyle={{
-              background: "var(--popover)",
-              border: "1px solid var(--border)",
-              borderRadius: 12,
-              fontSize: 12,
-            }}
-            formatter={(value: number) => [`${value}%`, "Valor"]}
-          />
-          <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
-        </RadarChart>
-      </ResponsiveContainer>
+        ))}
+
+        {data.map((d, i) => {
+          const labelPt = getPoint(i, R + 18);
+          const anchor = labelPt.x < CX - 10 ? "end" : labelPt.x > CX + 10 ? "start" : "middle";
+          return (
+            <text
+              key={i}
+              x={labelPt.x}
+              y={labelPt.y + 4}
+              textAnchor={anchor}
+              fontSize={11}
+              fill="var(--muted-foreground)"
+              fontWeight={500}
+            >
+              {d.variable}
+            </text>
+          );
+        })}
+
+        {Array.from({ length: RINGS }, (_, r) => {
+          const v = ((r + 1) / RINGS) * 100;
+          const pt = getPoint(0, (v / 100) * R);
+          return (
+            <text
+              key={r}
+              x={pt.x + 4}
+              y={pt.y - 4}
+              fontSize={8}
+              fill="var(--muted-foreground)"
+              opacity={0.6}
+            >
+              {v}
+            </text>
+          );
+        })}
+
+        <rect
+          x={0}
+          y={0}
+          width={500}
+          height={280}
+          fill="transparent"
+          onMouseLeave={() => setHoverIdx(null)}
+          onMouseMove={(e) => {
+            const svg = e.currentTarget.ownerSVGElement;
+            if (!svg) return;
+            const rect = svg.getBoundingClientRect();
+            const mx = ((e.clientX - rect.left) / rect.width) * 500;
+            const my = ((e.clientY - rect.top) / rect.height) * 280;
+            let closest = 0;
+            let minDist = Infinity;
+            dataPoints.forEach((p, i) => {
+              const dist = Math.hypot(mx - p.x, my - p.y);
+              if (dist < minDist) {
+                minDist = dist;
+                closest = i;
+              }
+            });
+            if (minDist < 30) setHoverIdx(closest);
+            else setHoverIdx(null);
+          }}
+        />
+
+        {hoverIdx != null && (
+          <g>
+            <rect
+              x={CX - 65}
+              y={4}
+              width={130}
+              height={28}
+              rx={8}
+              fill="var(--popover)"
+              stroke="var(--border)"
+              strokeWidth={1}
+            />
+            <text
+              x={CX}
+              y={22}
+              textAnchor="middle"
+              fontSize={11}
+              fill="var(--foreground)"
+              fontWeight={600}
+            >
+              {data[hoverIdx].variable}: {data[hoverIdx].value}%
+            </text>
+          </g>
+        )}
+      </svg>
+      <div className="mt-1 flex items-center justify-center gap-1 text-[11px] text-muted-foreground">
+        <span className="inline-block h-2 w-4 rounded bg-primary opacity-30" /> Valores normalizados
+        (0–100%)
+      </div>
     </div>
   );
-}
+});

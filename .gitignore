@@ -31,6 +31,13 @@ test-results/
 .env
 .env.local
 .env.production
+ATT41473.env
+
+# Database scripts (contain credentials)
+scripts/*.cjs
+
+# Supabase temp
+supabase/.temp/
 
 # Wrangler / Cloudflare
 .wrangler/

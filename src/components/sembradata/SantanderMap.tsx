@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { Minus, Plus, RotateCcw, MapPin } from "lucide-react";
 import { CROP_DATA } from "./data";
 import type { CropKey, Risk } from "@/types/crops";
@@ -42,6 +42,7 @@ export const SantanderMap = memo(function SantanderMap({
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [focusedIdx, setFocusedIdx] = useState<number>(-1);
+  const lastTipUpdate = useRef(0);
 
   const features = useMemo<FeatureResult[]>(() => {
     return getFeaturesForDepartment(SANTANDER.nombre);
@@ -52,7 +53,10 @@ export const SantanderMap = memo(function SantanderMap({
     [selected, features],
   );
 
-  const activeFeature = features.find((m) => m.id === hover) ?? selectedFeature;
+  const activeFeature = useMemo(
+    () => features.find((m) => m.id === hover) ?? selectedFeature,
+    [hover, features, selectedFeature],
+  );
 
   const viewBox = useMemo(() => {
     const w = VIEW_W / zoom;
@@ -87,6 +91,14 @@ export const SantanderMap = memo(function SantanderMap({
     }
   }
 
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const now = performance.now();
+    if (now - lastTipUpdate.current < 50) return;
+    lastTipUpdate.current = now;
+    const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+    setTip({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }, []);
+
   // Label top municipalities by area
   const labeledIds = useMemo(() => {
     const topN = Math.min(14, Math.max(5, Math.floor(features.length * 0.15)));
@@ -115,6 +127,7 @@ export const SantanderMap = memo(function SantanderMap({
             role="application"
             aria-label="Mapa interactivo de Santander"
             onKeyDown={handleMapKeyDown}
+            onMouseMove={handleMouseMove}
             onMouseLeave={() => {
               setHover(null);
               setTip(null);
@@ -168,25 +181,7 @@ export const SantanderMap = memo(function SantanderMap({
                   style={{
                     color: isSelected || isFocused ? "hsl(var(--foreground))" : undefined,
                   }}
-                  onMouseEnter={(e) => {
-                    setHover(m.id);
-                    const rect = (
-                      e.currentTarget.ownerSVGElement as SVGSVGElement
-                    ).getBoundingClientRect();
-                    setTip({
-                      x: e.clientX - rect.left,
-                      y: e.clientY - rect.top,
-                    });
-                  }}
-                  onMouseMove={(e) => {
-                    const rect = (
-                      e.currentTarget.ownerSVGElement as SVGSVGElement
-                    ).getBoundingClientRect();
-                    setTip({
-                      x: e.clientX - rect.left,
-                      y: e.clientY - rect.top,
-                    });
-                  }}
+                  onMouseEnter={() => setHover(m.id)}
                   onClick={() => onSelect(m.name)}
                 />
               );

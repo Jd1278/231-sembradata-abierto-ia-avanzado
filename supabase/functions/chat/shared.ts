@@ -28,15 +28,44 @@ export function classifyIntent(msg: string): Intent {
     .trim();
 
   if (/^(hola|buenos dias|buenas tardes|buenas noches)/.test(ascii)) return "GREETING";
-  if (/recomiend/.test(ascii) || (/cultivo/.test(ascii) && /conviene|recomienda/.test(ascii)))
+
+  if (
+    /recomiend/.test(ascii) ||
+    /viabilidad/.test(ascii) ||
+    /viable/.test(ascii) ||
+    /(que|cuál|cual|mejor|que cultivo|cual cultivo).{0,20}cultivo/.test(ascii) ||
+    /cultivo.{0,20}(que|cuál|cual|mejor)/.test(ascii) ||
+    (/cultivo/.test(ascii) && /conviene|recomienda|siembra|produce/.test(ascii)) ||
+    /apto para/.test(ascii) ||
+    /funciona en/.test(ascii)
+  )
     return "CROP_RECOMMENDATION";
-  if (/riesgo/.test(ascii) || /peligro/.test(ascii)) return "CROP_RISK_ANALYSIS";
+
+  if (
+    /riesgo/.test(ascii) ||
+    /peligro/.test(ascii) ||
+    /exito/.test(ascii) ||
+    /éxito/.test(ascii) ||
+    /probabilidad/.test(ascii) ||
+    /tiene exito/.test(ascii) ||
+    /saldrá/.test(ascii) ||
+    /saldra/.test(ascii)
+  )
+    return "CROP_RISK_ANALYSIS";
+
   if (
     /requisito/.test(ascii) ||
     /como (sembrar|plantar|cultivar)/.test(ascii) ||
-    /pasos para sembrar/.test(ascii)
+    /pasos para sembrar/.test(ascii) ||
+    /\bsembrar\b/.test(ascii) ||
+    /\bplantar\b/.test(ascii) ||
+    /\bcultivar\b/.test(ascii) ||
+    /ciclo de vida/.test(ascii) ||
+    /cuidados/.test(ascii) ||
+    /cosecha/.test(ascii)
   )
     return "CROP_REQUIREMENTS";
+
   return "UNKNOWN";
 }
 

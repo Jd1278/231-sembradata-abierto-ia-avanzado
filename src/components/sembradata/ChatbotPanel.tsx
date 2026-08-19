@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Lightbulb, MessageSquare, Send, Trash2, X } from "lucide-react";
 
 /* Lightweight markdown: bold, bullet lists, line breaks */
@@ -72,8 +72,13 @@ export function ChatbotPanel({ municipio, crop }: { municipio?: string; crop?: s
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const sessionId = useId();
   const suggestions = useMemo(() => getSuggestions(crop, municipio), [crop, municipio]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [messages]);
 
   function clearChat() {
     setMessages([
@@ -159,6 +164,7 @@ export function ChatbotPanel({ municipio, crop }: { municipio?: string; crop?: s
               <button
                 onClick={clearChat}
                 className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                aria-label="Limpiar conversación"
                 title="Limpiar conversación"
               >
                 <Trash2 className="h-4 w-4" />
@@ -168,6 +174,7 @@ export function ChatbotPanel({ municipio, crop }: { municipio?: string; crop?: s
         </div>
 
         <div
+          ref={scrollRef}
           className="flex-1 overflow-y-auto p-4 space-y-3"
           style={{ maxHeight: 360 }}
           aria-live="polite"
@@ -237,6 +244,7 @@ export function ChatbotPanel({ municipio, crop }: { municipio?: string; crop?: s
                   <button
                     key={s}
                     onClick={() => send(s)}
+                    aria-label={`Enviar: ${s}`}
                     className="rounded-lg border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground transition hover:border-primary/30 hover:text-foreground"
                   >
                     {s}
@@ -264,7 +272,8 @@ export function ChatbotPanel({ municipio, crop }: { municipio?: string; crop?: s
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Escribe tu pregunta..."
-              className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+              disabled={loading}
+              className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
             />
             <Button
               type="submit"

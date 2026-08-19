@@ -30,7 +30,7 @@ import {
   estimateTemperature,
   estimatePrecipitation,
 } from "./data";
-import type { CropKey } from "@/types/crops";
+import type { CropKey, SoilType } from "@/types/crops";
 import { OfflineIndicator } from "./OfflineIndicator";
 import { AdvancedFilters, type AdvancedFilterValues } from "./AdvancedFilters";
 import { FilterBlock } from "./dashboard/FilterBlock";
@@ -69,6 +69,7 @@ interface RealtimeData {
   soil: SoilData | null;
   viability: ViabilityResult | null;
   loading: boolean;
+  error: string | null;
 }
 
 const santanderMunis = MUNICIPIOS.filter(
@@ -89,13 +90,14 @@ export function Dashboard() {
     altitudeRange: [0, 4000],
     tempRange: [10, 35],
     precipRange: [0, 4000],
-    soilType: "all",
+    soilType: "all" as SoilType,
   });
   const [realtime, setRealtime] = useState<RealtimeData>({
     climate: null,
     soil: null,
     viability: null,
     loading: true,
+    error: null,
   });
 
   const filteredMunicipios = useMemo(() => {
@@ -134,14 +136,18 @@ export function Dashboard() {
   const lng = muni ? (muni.geolng ?? SANTANDER.lng) : SANTANDER.lng;
 
   const fetchGen = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchRealtimeData = useCallback(async () => {
     if (!muni) {
-      setRealtime({ climate: null, soil: null, viability: null, loading: false });
+      setRealtime({ climate: null, soil: null, viability: null, loading: false, error: null });
       return;
     }
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     const gen = ++fetchGen.current;
-    setRealtime({ climate: null, soil: null, viability: null, loading: true });
+    setRealtime({ climate: null, soil: null, viability: null, loading: true, error: null });
     try {
       const pastDays = getOptimalPastDays(crop);
       const [climateData, soilData] = await Promise.all([
@@ -149,7 +155,7 @@ export function Dashboard() {
         fetchSoilData(lat, lng),
       ]);
 
-      if (gen !== fetchGen.current) return;
+      if (gen !== fetchGen.current || controller.signal.aborted) return;
 
       const tempOk =
         climateData.temperature >= filters.tempRange[0] &&
@@ -163,7 +169,7 @@ export function Dashboard() {
 
       if (!tempOk || !precipOk || !altOk) {
         if (gen === fetchGen.current)
-          setRealtime({ climate: null, soil: null, viability: null, loading: false });
+          setRealtime({ climate: null, soil: null, viability: null, loading: false, error: null });
         return;
       }
 
@@ -184,16 +190,29 @@ export function Dashboard() {
         true,
       );
       if (gen === fetchGen.current)
-        setRealtime({ climate: climateData, soil: soilData, viability: v, loading: false });
+        setRealtime({
+          climate: climateData,
+          soil: soilData,
+          viability: v,
+          loading: false,
+          error: null,
+        });
     } catch (err) {
       console.warn("Dashboard fetchRealtimeData error:", err);
       if (gen === fetchGen.current)
-        setRealtime({ climate: null, soil: null, viability: null, loading: false });
+        setRealtime({
+          climate: null,
+          soil: null,
+          viability: null,
+          loading: false,
+          error: "No se pudieron cargar los datos climáticos.",
+        });
     }
   }, [muni, crop, month, filters, lat, lng]);
 
   useEffect(() => {
     fetchRealtimeData();
+    return () => abortRef.current?.abort();
   }, [fetchRealtimeData]);
 
   useEffect(() => {
@@ -248,6 +267,8 @@ export function Dashboard() {
                 <button
                   key={c.key}
                   onClick={() => setCrop(c.key)}
+                  aria-label={`Seleccionar ${c.label}`}
+                  aria-pressed={active}
                   className={cn(
                     "flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all",
                     active
@@ -285,7 +306,7 @@ export function Dashboard() {
 
                 <FilterBlock label="Municipio" icon={<MapPin className="h-4 w-4" />}>
                   <Select value={municipio} onValueChange={setMunicipio}>
-                    <SelectTrigger className="w-full rounded-xl">
+                    <SelectTrigger className="w-full rounded-xl" aria-label="Seleccionar municipio">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -313,7 +334,7 @@ export function Dashboard() {
                         if (Number(v) < Number(year)) setMonth("Ene");
                       }}
                     >
-                      <SelectTrigger className="rounded-xl">
+                      <SelectTrigger className="rounded-xl" aria-label="Seleccionar año">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -327,7 +348,7 @@ export function Dashboard() {
                   </FilterBlock>
                   <FilterBlock label="Mes">
                     <Select value={month} onValueChange={setMonth}>
-                      <SelectTrigger className="rounded-xl">
+                      <SelectTrigger className="rounded-xl" aria-label="Seleccionar mes">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -402,6 +423,12 @@ export function Dashboard() {
                 <span className="ml-2 text-sm text-muted-foreground">
                   Cargando datos climáticos en tiempo real...
                 </span>
+              </div>
+            )}
+
+            {realtime.error && !realtime.loading && (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                {realtime.error}
               </div>
             )}
 
@@ -480,6 +507,7 @@ export function Dashboard() {
                     variant="ghost"
                     size="sm"
                     className="rounded-xl text-xs text-muted-foreground hover:text-foreground"
+                    aria-label="Limpiar filtros y selección"
                     onClick={() => {
                       setMunicipio(
                         santanderMunis.find((m) => /vicente/i.test(m.name))?.name ??
@@ -493,7 +521,7 @@ export function Dashboard() {
                         altitudeRange: [0, 4000],
                         tempRange: [10, 35],
                         precipRange: [0, 4000],
-                        soilType: "all",
+                        soilType: "all" as SoilType,
                       });
                       setShowPrediction(false);
                     }}
@@ -504,6 +532,7 @@ export function Dashboard() {
                     variant="outline"
                     size="sm"
                     className="rounded-xl text-xs"
+                    aria-label="Analizar zona seleccionada"
                     onClick={() => {
                       if (muni) setShowPrediction(true);
                     }}
@@ -542,15 +571,13 @@ export function Dashboard() {
                   </p>
                 </CardHeader>
                 <CardContent>
-                  <Suspense
-                    fallback={<div className="h-[280px] animate-pulse rounded-2xl bg-muted" />}
-                  >
+                  <SectionErrorBoundary sectionName="Gráfico de rendimiento">
                     <YieldChart
                       crop={crop}
                       factor={muni?.factor ?? 1}
                       viabilityScore={realtime.viability?.score ?? 50}
                     />
-                  </Suspense>
+                  </SectionErrorBoundary>
                 </CardContent>
               </Card>
 
@@ -562,15 +589,13 @@ export function Dashboard() {
                   <p className="text-xs text-muted-foreground">Sequía, heladas y plagas</p>
                 </CardHeader>
                 <CardContent>
-                  <Suspense
-                    fallback={<div className="h-[280px] animate-pulse rounded-2xl bg-muted" />}
-                  >
+                  <SectionErrorBoundary sectionName="Gráfico de riesgos">
                     <RiskChart
                       factor={muni?.factor ?? 1}
                       climate={realtime.climate}
                       viability={realtime.viability}
                     />
-                  </Suspense>
+                  </SectionErrorBoundary>
                 </CardContent>
               </Card>
 

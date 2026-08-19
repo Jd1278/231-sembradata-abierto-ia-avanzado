@@ -1,22 +1,23 @@
 import { useState } from "react";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { SoilType } from "@/types/crops";
 
 export interface AdvancedFilterValues {
   altitudeRange: [number, number];
   tempRange: [number, number];
   precipRange: [number, number];
-  soilType: string;
+  soilType: SoilType;
 }
 
 const DEFAULT_FILTERS: AdvancedFilterValues = {
   altitudeRange: [0, 4000],
   tempRange: [10, 35],
   precipRange: [0, 4000],
-  soilType: "all",
+  soilType: "all" as SoilType,
 };
 
-const SOIL_TYPES = [
+const SOIL_TYPES: { value: SoilType; label: string }[] = [
   { value: "all", label: "Todos" },
   { value: "arcilla", label: "Arcilla" },
   { value: "limo", label: "Limo" },

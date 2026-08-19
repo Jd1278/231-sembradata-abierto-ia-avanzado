@@ -15,6 +15,8 @@ export interface SoilData {
   carbonStock: number;
 }
 
+import { rateLimitedFetch } from "./rate-limiter";
+
 const SOILGRIDS_URL = "https://rest.isric.org/soilgrids/v2.0/properties/query";
 
 function mapTexture(clay: number, sand: number, silt: number): string {
@@ -74,7 +76,7 @@ export async function fetchSoilData(
       value: "mean",
     });
 
-    const res = await fetch(`${SOILGRIDS_URL}?${params}`);
+    const res = await rateLimitedFetch("soilgrids", `${SOILGRIDS_URL}?${params}`);
     if (!res.ok) throw new Error(`Soil API error: ${res.status}`);
     const data = await res.json();
 

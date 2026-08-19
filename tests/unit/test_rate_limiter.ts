@@ -173,7 +173,10 @@ describe("rateLimitedFetch", () => {
     const init: RequestInit = { method: "POST", headers: { "Content-Type": "application/json" } };
     await rateLimitedFetch("nasa_power", "https://example.com", "global", init);
 
-    expect(fetchSpy).toHaveBeenCalledWith("https://example.com", init);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "https://example.com",
+      expect.objectContaining({ method: "POST", headers: { "Content-Type": "application/json" } }),
+    );
   });
 
   it("works for open_meteo with high limit (60)", async () => {

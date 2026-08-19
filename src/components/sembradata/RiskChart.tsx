@@ -1,14 +1,4 @@
-import { memo } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { memo, useMemo, useState } from "react";
 import type { ClimateData } from "@/services/climate-api";
 import type { ViabilityResult } from "@/types/prediction-v2";
 import { MONTH_LABELS } from "@/services/temporal-optimizer";
@@ -19,134 +9,253 @@ interface Props {
   viability?: ViabilityResult | null;
 }
 
+const W = 500;
+const H = 260;
+const PAD = { top: 12, right: 12, bottom: 30, left: 36 };
+const PW = W - PAD.left - PAD.right;
+const PH = H - PAD.top - PAD.bottom;
+const SERIES = ["Sequía", "Heladas", "Plagas"] as const;
+const COLORS: Record<string, string> = {
+  Sequía: "var(--risk-high)",
+  Heladas: "var(--sky)",
+  Plagas: "var(--risk-med)",
+};
+
 export const RiskChart = memo(function RiskChart({ factor, climate, viability }: Props) {
   const hasRealData = !!(climate && climate.dailyData.length > 0);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
-  const data = MONTH_LABELS.map((m, i) => {
-    if (hasRealData && climate) {
-      const monthData = climate.dailyData.filter((d) => {
-        const dateMonth = new Date(d.date).getMonth();
-        return dateMonth === i;
-      });
-
-      if (monthData.length > 0) {
-        const avgPrecip = monthData.reduce((s, d) => s + d.precip, 0) / monthData.length;
-        const avgTemp =
-          monthData.reduce((s, d) => s + (d.tempMax + d.tempMin) / 2, 0) / monthData.length;
-        const avgHum = monthData.reduce((s, d) => s + d.humidity, 0) / monthData.length;
-        const avgWind = monthData.reduce((s, d) => s + d.windSpeed, 0) / monthData.length;
-
-        const droughtRisk = Math.round(
-          Math.min(
-            100,
-            Math.max(
-              5,
-              (1 - avgPrecip / 60) * 40 +
-                (avgTemp > 28 ? 20 : avgTemp > 25 ? 10 : 0) +
-                (avgWind > 15 ? 10 : 0),
+  const data = useMemo(() => {
+    let result = MONTH_LABELS.map((m, i) => {
+      if (hasRealData && climate) {
+        const monthData = climate.dailyData.filter((d) => new Date(d.date).getMonth() === i);
+        if (monthData.length > 0) {
+          const avgPrecip = monthData.reduce((s, d) => s + d.precip, 0) / monthData.length;
+          const avgTemp =
+            monthData.reduce((s, d) => s + (d.tempMax + d.tempMin) / 2, 0) / monthData.length;
+          const avgHum = monthData.reduce((s, d) => s + d.humidity, 0) / monthData.length;
+          const avgWind = monthData.reduce((s, d) => s + d.windSpeed, 0) / monthData.length;
+          const droughtRisk = Math.round(
+            Math.min(
+              100,
+              Math.max(
+                5,
+                (1 - avgPrecip / 60) * 40 +
+                  (avgTemp > 28 ? 20 : avgTemp > 25 ? 10 : 0) +
+                  (avgWind > 15 ? 10 : 0),
+              ),
             ),
-          ),
-        );
-        const frostRisk = Math.round(
-          Math.min(100, Math.max(2, avgTemp < 5 ? 70 : avgTemp < 10 ? 45 : avgTemp < 15 ? 15 : 3)),
-        );
-        const pestRisk = Math.round(
-          Math.min(
-            100,
-            Math.max(
-              5,
-              (avgHum > 85 ? 35 : avgHum > 75 ? 25 : avgHum > 65 ? 12 : 0) +
-                (avgTemp >= 20 && avgTemp <= 28 ? 20 : avgTemp >= 15 && avgTemp <= 30 ? 10 : 0) +
-                (avgPrecip > 80 ? 15 : avgPrecip > 50 ? 8 : 0) +
-                (avgWind > 20 ? 10 : 0),
+          );
+          const frostRisk = Math.round(
+            Math.min(
+              100,
+              Math.max(2, avgTemp < 5 ? 70 : avgTemp < 10 ? 45 : avgTemp < 15 ? 15 : 3),
             ),
-          ),
-        );
+          );
+          const pestRisk = Math.round(
+            Math.min(
+              100,
+              Math.max(
+                5,
+                (avgHum > 85 ? 35 : avgHum > 75 ? 25 : avgHum > 65 ? 12 : 0) +
+                  (avgTemp >= 20 && avgTemp <= 28 ? 20 : avgTemp >= 15 && avgTemp <= 30 ? 10 : 0) +
+                  (avgPrecip > 80 ? 15 : avgPrecip > 50 ? 8 : 0) +
+                  (avgWind > 20 ? 10 : 0),
+              ),
+            ),
+          );
+          return { mes: m, Sequía: droughtRisk, Heladas: frostRisk, Plagas: pestRisk };
+        }
+      }
+      const seasonal = Math.sin((i / 12) * Math.PI * 2);
+      const f = factor ?? 1;
+      return {
+        mes: m,
+        Sequía: Math.max(5, Math.round(40 + seasonal * 25 - f * 10)),
+        Heladas: Math.max(2, Math.round(15 - seasonal * 10)),
+        Plagas: Math.max(10, Math.round(35 + Math.cos((i / 12) * Math.PI * 2) * 20)),
+      };
+    });
 
-        return { mes: m, Sequía: droughtRisk, Heladas: frostRisk, Plagas: pestRisk };
+    if (viability) {
+      const score = viability.score;
+      const clamp = (v: number) => Math.min(100, Math.max(0, Math.round(v)));
+      if (score >= 70) {
+        result = result.map((d) => ({
+          ...d,
+          Sequía: clamp(d.Sequía * 0.7),
+          Heladas: clamp(d.Heladas * 0.7),
+          Plagas: clamp(d.Plagas * 0.7),
+        }));
+      } else if (score < 50) {
+        result = result.map((d) => ({
+          ...d,
+          Sequía: clamp(d.Sequía * 1.3),
+          Heladas: clamp(d.Heladas * 1.3),
+          Plagas: clamp(d.Plagas * 1.3),
+        }));
       }
     }
+    return result;
+  }, [hasRealData, climate, factor, viability]);
 
-    const seasonal = Math.sin((i / 12) * Math.PI * 2);
-    return {
-      mes: m,
-      Sequía: Math.max(5, Math.round(40 + seasonal * 25 - factor * 10)),
-      Heladas: Math.max(2, Math.round(15 - seasonal * 10)),
-      Plagas: Math.max(10, Math.round(35 + Math.cos((i / 12) * Math.PI * 2) * 20)),
-    };
-  });
+  const yMax = 100;
+  const barGroupW = PW / data.length;
+  const barW = Math.min(12, (barGroupW - 8) / SERIES.length);
+  const gap = 2;
 
-  if (viability) {
-    const score = viability.score;
-    if (score >= 70)
-      data.forEach((d) => {
-        d.Sequía = Math.round(d.Sequía * 0.7);
-        d.Heladas = Math.round(d.Heladas * 0.7);
-        d.Plagas = Math.round(d.Plagas * 0.7);
-      });
-    else if (score < 50)
-      data.forEach((d) => {
-        d.Sequía = Math.round(d.Sequía * 1.3);
-        d.Heladas = Math.round(d.Heladas * 1.3);
-        d.Plagas = Math.round(d.Plagas * 1.3);
-      });
-  }
+  const yScale = (v: number) => PAD.top + PH - (v / yMax) * PH;
 
   return (
-    <div className="h-[280px] w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 10, right: 8, left: -12, bottom: 0 }}>
-          <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
-          <XAxis
-            dataKey="mes"
-            stroke="var(--muted-foreground)"
-            fontSize={10}
-            tickLine={false}
-            axisLine={false}
+    <div
+      className="h-[280px] w-full"
+      role="img"
+      aria-label="Gráfico de riesgos climáticos por mes: sequía, heladas y plagas"
+    >
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
+        {[0, 25, 50, 75, 100].map((v) => {
+          const y = yScale(v);
+          return (
+            <g key={v}>
+              <line
+                x1={PAD.left}
+                y1={y}
+                x2={W - PAD.right}
+                y2={y}
+                stroke="var(--border)"
+                strokeDasharray="3 3"
+              />
+              <text
+                x={PAD.left - 6}
+                y={y + 4}
+                textAnchor="end"
+                fontSize={10}
+                fill="var(--muted-foreground)"
+              >
+                {v}
+              </text>
+            </g>
+          );
+        })}
+
+        {data.map((d, i) => {
+          const groupX = PAD.left + i * barGroupW + barGroupW / 2;
+          return (
+            <text
+              key={i}
+              x={groupX}
+              y={H - 4}
+              textAnchor="middle"
+              fontSize={9}
+              fill="var(--muted-foreground)"
+            >
+              {d.mes.slice(0, 3)}
+            </text>
+          );
+        })}
+
+        {hoverIdx != null && (
+          <rect
+            x={PAD.left + hoverIdx * barGroupW}
+            y={PAD.top}
+            width={barGroupW}
+            height={PH}
+            fill="var(--muted)"
+            opacity={0.3}
           />
-          <YAxis
-            stroke="var(--muted-foreground)"
-            fontSize={10}
-            tickLine={false}
-            axisLine={false}
-            domain={[0, 100]}
-          />
-          <Tooltip
-            contentStyle={{
-              background: "var(--popover)",
-              border: "1px solid var(--border)",
-              borderRadius: 12,
-              fontSize: 12,
-            }}
-            cursor={{ fill: "var(--muted)", opacity: 0.4 }}
-          />
-          <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
-          <Bar
-            dataKey="Sequía"
-            fill="var(--risk-high)"
-            radius={[4, 4, 0, 0]}
-            isAnimationActive={true}
-            animationDuration={800}
-            animationEasing="ease-out"
-          />
-          <Bar
-            dataKey="Heladas"
-            fill="var(--sky)"
-            radius={[4, 4, 0, 0]}
-            isAnimationActive={true}
-            animationDuration={800}
-            animationEasing="ease-out"
-          />
-          <Bar
-            dataKey="Plagas"
-            fill="var(--risk-med)"
-            radius={[4, 4, 0, 0]}
-            isAnimationActive={true}
-            animationDuration={800}
-            animationEasing="ease-out"
-          />
-        </BarChart>
-      </ResponsiveContainer>
+        )}
+
+        {data.map((d, i) => {
+          const groupX = PAD.left + i * barGroupW + barGroupW / 2;
+          const totalW = SERIES.length * barW + (SERIES.length - 1) * gap;
+          const startX = groupX - totalW / 2;
+          return SERIES.map((s, j) => {
+            const val = d[s];
+            const barH = (val / yMax) * PH;
+            const x = startX + j * (barW + gap);
+            const y = yScale(val);
+            return (
+              <rect
+                key={`${i}-${j}`}
+                x={x}
+                y={y}
+                width={barW}
+                height={barH}
+                rx={barW > 6 ? 3 : 1.5}
+                fill={COLORS[s]}
+                opacity={0.85}
+              />
+            );
+          });
+        })}
+
+        <rect
+          x={0}
+          y={0}
+          width={W}
+          height={H}
+          fill="transparent"
+          onMouseLeave={() => setHoverIdx(null)}
+          onMouseMove={(e) => {
+            const svg = e.currentTarget.ownerSVGElement;
+            if (!svg) return;
+            const rect = svg.getBoundingClientRect();
+            const mouseX = ((e.clientX - rect.left) / rect.width) * W;
+            const idx = Math.floor(((mouseX - PAD.left) / PW) * data.length);
+            setHoverIdx(Math.max(0, Math.min(data.length - 1, idx)));
+          }}
+        />
+
+        {hoverIdx != null && (
+          <g>
+            <rect
+              x={PAD.left + hoverIdx * barGroupW + 2}
+              y={PAD.top - 2}
+              width={100}
+              height={50}
+              rx={8}
+              fill="var(--popover)"
+              stroke="var(--border)"
+              strokeWidth={1}
+            />
+            <text
+              x={PAD.left + hoverIdx * barGroupW + 8}
+              y={PAD.top + 12}
+              fontSize={10}
+              fill="var(--foreground)"
+              fontWeight={600}
+            >
+              {data[hoverIdx].mes}
+            </text>
+            {SERIES.map((s, j) => (
+              <g key={s}>
+                <circle
+                  cx={PAD.left + hoverIdx * barGroupW + 12}
+                  cy={PAD.top + 24 + j * 11}
+                  r={3}
+                  fill={COLORS[s]}
+                />
+                <text
+                  x={PAD.left + hoverIdx * barGroupW + 20}
+                  y={PAD.top + 28 + j * 11}
+                  fontSize={9}
+                  fill="var(--muted-foreground)"
+                >
+                  {s}: {data[hoverIdx][s]}
+                </text>
+              </g>
+            ))}
+          </g>
+        )}
+      </svg>
+      <div className="mt-1 flex items-center justify-center gap-3 text-[11px] text-muted-foreground">
+        {SERIES.map((s) => (
+          <span key={s} className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[s] }} />
+            {s}
+          </span>
+        ))}
+      </div>
     </div>
   );
 });

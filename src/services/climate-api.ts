@@ -68,6 +68,12 @@ function getCached<T>(url: string): T | null {
 }
 
 function setCache(url: string, data: unknown): void {
+  if (responseCache.size > 100) {
+    const now = Date.now();
+    for (const [key, entry] of responseCache) {
+      if (now - entry.at > CACHE_TTL_MS) responseCache.delete(key);
+    }
+  }
   if (responseCache.size > 200) {
     const oldest = responseCache.keys().next().value;
     if (oldest) responseCache.delete(oldest);
@@ -180,7 +186,9 @@ function computeAgriculturalIndices(
   const monthlyPrecip = avgPrecip * 30;
   return {
     GrowingDegreeDays: +gdd.toFixed(1),
-    aridityIndex: +(monthlyPrecip > 0 ? monthlyPrecip / (gdd * 0.002 + 0.5) : 0).toFixed(2),
+    aridityIndex: +Math.min(2, monthlyPrecip > 0 ? monthlyPrecip / (gdd * 0.002 + 0.5) : 0).toFixed(
+      2,
+    ),
     moistureStressIndex: +(avgHumidity < 40 ? 1 : avgHumidity < 60 ? 0.5 : 0).toFixed(2),
     frostRisk: +(dailyData.some((d) => d.tempMin < 2) ? 0.8 : 0).toFixed(2),
     droughtRisk: +(monthlyPrecip < 30 ? 0.9 : monthlyPrecip < 60 ? 0.5 : 0.1).toFixed(2),
@@ -223,7 +231,7 @@ export async function fetchCurrentClimate(
     data = (await res.json()) as Record<string, unknown>;
     setCache(url, data);
   }
-  const current = data.current as Record<string, number>;
+  const current = (data.current ?? {}) as Record<string, number>;
   const dailyData = mapDailyData(data.daily as Parameters<typeof mapDailyData>[0]);
 
   let tempSum = 0,
