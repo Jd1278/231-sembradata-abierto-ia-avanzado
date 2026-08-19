@@ -89,6 +89,10 @@ async function fetchForecast(symbol: string): Promise<CommodityForecast> {
   if (!res.ok) throw new Error(`Commodity API error: ${res.status}`);
   const data = await res.json();
 
+  if (!data?.currentPrice?.value || !data.signal || !data.recommendation) {
+    throw new Error(`Invalid commodity API response shape for ${symbol}`);
+  }
+
   setCachedCommodity(symbol, data);
 
   return data;

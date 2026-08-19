@@ -79,7 +79,8 @@ async function fetchAllSocrata(
 ): Promise<Record<string, unknown>[]> {
   const all: Record<string, unknown>[] = [];
   let offset = 0;
-  while (true) {
+  const MAX_RECORDS = 5000;
+  while (offset < MAX_RECORDS) {
     query.set("$limit", String(PAGE_SIZE));
     query.set("$offset", String(offset));
 
