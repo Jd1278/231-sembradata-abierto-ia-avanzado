@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.192.0/http/server.ts";
 import { classifyIntent, buildSystemPrompt, type Intent } from "./shared.ts";
 import { searchKnowledgeBase, formatRagContext } from "./rag.ts";
 import { saveMessage, getHistory, formatHistoryForLLM } from "./memory.ts";
@@ -127,7 +126,7 @@ function jsonResponse(body: Record<string, unknown>, status = 200, origin: strin
   });
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
 
   if (req.method === "OPTIONS") {
