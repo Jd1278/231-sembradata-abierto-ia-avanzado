@@ -257,7 +257,7 @@ function computeAgriculturalIndices(
   // < 50 mm/month = severe drought risk, < 100 mm/month = moderate, else low
   return {
     GrowingDegreeDays: +gdd.toFixed(1),
-    aridityIndex: +Math.min(5, ratio).toFixed(2),
+    aridityIndex: +Math.min(8, ratio).toFixed(2),
     moistureStressIndex: +moistureStress.toFixed(2),
     frostRisk: +(dailyData.some((d) => d.tempMin < 2) ? 0.8 : 0).toFixed(2),
     droughtRisk: +(recentMonthlyPrecip < 50 ? 0.9 : recentMonthlyPrecip < 100 ? 0.5 : 0.1).toFixed(

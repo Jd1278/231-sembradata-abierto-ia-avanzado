@@ -605,7 +605,7 @@ export function Dashboard() {
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-muted/40 px-3 py-1.5">
                   <span className="font-medium text-foreground">Índice de aridez</span>
-                  <span className={metrics.aridez > 0.5 ? "text-risk-high" : "text-risk-low"}>
+                  <span className={metrics.aridez < 0.5 ? "text-risk-high" : "text-risk-low"}>
                     {metrics.aridez.toFixed(2)}
                   </span>
                 </span>
