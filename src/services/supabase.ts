@@ -162,3 +162,49 @@ export async function getYieldSeriesByNames(
     return { historical: [], predictions: [] };
   }
 }
+
+export async function getCropClimateRequirements(cropId?: string) {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    let query = supabase.from("crop_climate_requirements").select("*").eq("active", true);
+    if (cropId) query = query.eq("crop_id", cropId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getClimateSummaries(municipioId: string, periodType?: string) {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    let query = supabase
+      .from("climate_summaries")
+      .select("*")
+      .eq("municipio_id", municipioId)
+      .order("period_end", { ascending: false });
+    if (periodType) query = query.eq("period_type", periodType);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getLatestCommodityPrices(commodity?: "cafe" | "cacao" | "granadilla") {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    let query = supabase
+      .from("commodity_prices")
+      .select("*")
+      .order("fetched_at", { ascending: false });
+    if (commodity) query = query.eq("commodity", commodity);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}

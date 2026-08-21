@@ -116,15 +116,15 @@ Obtiene la lista de cultivos disponibles.
 
 Las siguientes APIs externas se consumen desde el frontend y backend (con cache en Supabase):
 
-| API                | Endpoint                 | Datos                                       |
-| ------------------ | ------------------------ | ------------------------------------------- |
-| Open-Meteo         | api.open-meteo.com       | Clima actual, pronostico 7d, historicos 90d, NDVI |
-| NASA POWER         | power.larc.nasa.gov      | Datos satelitales + indices agroclimaticos  |
-| IDEAM              | datos.gov.co             | Estaciones meteorologicas reales            |
-| SoilGrids          | rest.isric.org           | Propiedades del suelo (6 profundidades)     |
-| Commodity Forecast | commodityforecasts.co.uk | Precios cafe y cacao                        |
+| API                | Endpoint                 | Datos                                                     |
+| ------------------ | ------------------------ | --------------------------------------------------------- |
+| Open-Meteo         | api.open-meteo.com       | Clima actual, pronostico 7d, historicos 90d, NDVI         |
+| NASA POWER         | power.larc.nasa.gov      | Datos satelitales + indices agroclimaticos                |
+| IDEAM              | datos.gov.co             | Estaciones meteorologicas reales                          |
+| SoilGrids          | rest.isric.org           | Propiedades del suelo (6 profundidades)                   |
+| Commodity Forecast | commodityforecasts.co.uk | Precios cafe y cacao                                      |
 | Groq               | api.groq.com             | Chatbot IA (Llama 3.1 8B) via Edge Function (server-side) |
-| Supabase           | supabase.co              | PostgreSQL + Edge Functions + cache         |
+| Supabase           | supabase.co              | PostgreSQL + Edge Functions + cache                       |
 
 ## Documentacion OpenAPI
 

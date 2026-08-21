@@ -31,29 +31,30 @@
 **`https://231-sembradata-abierto-ia-avanzado.vercel.app/`**
 
 ### [Sustentación ](https://gamma.app/docs/Prediccion-Agroclimatica-Inteligente-vr0vp5qbfomjv4y)
+
 </div>
 
 ---
 
 ## Características Clave
 
-|                            | Característica                        | Descripción                                                                                                                                                                    |
-| :------------------------: | :------------------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|  :globe_showing_americas:  | **Mapa Interactivo Santander**        | Visualización coroplética de los **87 municipios** de Santander con selector de municipio y datos de riesgo agroclimático.                                                    |
-|        :bar_chart:         | **Panel de Predicción Detallado**     | Al seleccionar una zona, se abre un panel con variables de suelo (pH, materia orgánica, textura) y clima (temperatura, precipitación, viento, radiación solar) en tiempo real. |
-|       :earth_africa:       | **Datos Climáticos en Tiempo Real**   | Integración con **Open-Meteo API** para obtener clima actual, pronóstico 7 días e históricos (90 días). Sin API key requerida.                                                 |
-|        :satellite:         | **Validación Histórica (NASA POWER)** | Comparación pronóstico vs datos satelitales históricos de **NASA POWER** con índices agroclimáticos (GDD, aridez, estrés UV).                                                  |
-|         :antenna:          | **Estaciones IDEAM**                  | Datos reales de estaciones meteorológicas del **IDEAM** vía **datos.gov.co** (Socrata). Paginación automática y retry con exponential backoff.                                 |
-|         :seedling:         | **Análisis de Suelo**                 | Datos de **SoilGrids (ISRIC)** con 6 niveles de profundidad (0-5cm a 100-200cm): pH, materia orgánica, textura, drenaje, fertilidad, carbono orgánico.                         |
+|                            | Característica                        | Descripción                                                                                                                                                                         |
+| :------------------------: | :------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|  :globe_showing_americas:  | **Mapa Interactivo Santander**        | Visualización coroplética de los **87 municipios** de Santander con selector de municipio y datos de riesgo agroclimático.                                                          |
+|        :bar_chart:         | **Panel de Predicción Detallado**     | Al seleccionar una zona, se abre un panel con variables de suelo (pH, materia orgánica, textura) y clima (temperatura, precipitación, viento, radiación solar) en tiempo real.      |
+|       :earth_africa:       | **Datos Climáticos en Tiempo Real**   | Integración con **Open-Meteo API** para obtener clima actual, pronóstico 7 días e históricos (90 días). Sin API key requerida.                                                      |
+|        :satellite:         | **Validación Histórica (NASA POWER)** | Comparación pronóstico vs datos satelitales históricos de **NASA POWER** con índices agroclimáticos (GDD, aridez, estrés UV).                                                       |
+|         :antenna:          | **Estaciones IDEAM**                  | Datos reales de estaciones meteorológicas del **IDEAM** vía **datos.gov.co** (Socrata). Paginación automática y retry con exponential backoff.                                      |
+|         :seedling:         | **Análisis de Suelo**                 | Datos de **SoilGrids (ISRIC)** con 6 niveles de profundidad (0-5cm a 100-200cm): pH, materia orgánica, textura, drenaje, fertilidad, carbono orgánico.                              |
 |          :robot:           | **Chatbot con Groq Llama 3.1 8B**     | Asistente inteligente con clasificador heurístico de intenciones, extracción de entidades, perfiles de cultivo y consulta directa a Groq (Llama 3.1 8B) vía Supabase Edge Function. |
-|           :dart:           | **Evaluación de Viabilidad**          | Análisis automático: variables favorables/desfavorables, nivel de confianza, recomendaciones específicas y cultivos alternativos.                                              |
-|          :dollar:          | **Precios Internacionales**           | Precios de café (Arabica), cacao y commodities agrícolas con análisis de tendencia y detección de puntos de inflexión.                                                         |
-| :chart_with_upwards_trend: | **Panel de KPIs**                     | Métricas clave: rendimiento estimado, riesgo agroclimático, precipitación y temperatura.                                                                                       |
-|           :mag:            | **Índices Agroclimáticos**            | Días-grado acumulados, índice de aridez, estrés hídrico, riesgo de heladas, demanda hídrica.                                                                                   |
-|        :floppy_disk:        | **Cache de APIs**             | Cache inteligente en Supabase para datos de IDEAM (24h), NASA POWER (7 días) y precios (1h).                                                               |
-|       :potted_plant:       | **NDVI por satélite**                  | Índice de vegetación calculado desde datos satelitales de Open-Meteo Archive.                                                                                                  |
-|       :bookmark:         | **Historial de Análisis**             | Cada análisis se guarda automáticamente en Supabase (tabla `analysis_history`).                                                                                       |
-|          :phone:           | **PWA Offline**                       | Service Worker v2 con stale-while-revalidate y sincronización en IndexedDB.                                                                                                     |
+|           :dart:           | **Evaluación de Viabilidad**          | Análisis automático: variables favorables/desfavorables, nivel de confianza, recomendaciones específicas y cultivos alternativos.                                                   |
+|          :dollar:          | **Precios Internacionales**           | Precios de café (Arabica), cacao y commodities agrícolas con análisis de tendencia y detección de puntos de inflexión.                                                              |
+| :chart_with_upwards_trend: | **Panel de KPIs**                     | Métricas clave: rendimiento estimado, riesgo agroclimático, precipitación y temperatura.                                                                                            |
+|           :mag:            | **Índices Agroclimáticos**            | Días-grado acumulados, índice de aridez, estrés hídrico, riesgo de heladas, demanda hídrica.                                                                                        |
+|       :floppy_disk:        | **Cache de APIs**                     | Cache inteligente en Supabase para datos de IDEAM (24h), NASA POWER (7 días) y precios (1h).                                                                                        |
+|       :potted_plant:       | **NDVI por satélite**                 | Índice de vegetación calculado desde datos satelitales de Open-Meteo Archive.                                                                                                       |
+|         :bookmark:         | **Historial de Análisis**             | Cada análisis se guarda automáticamente en Supabase (tabla `analysis_history`).                                                                                                     |
+|          :phone:           | **PWA Offline**                       | Service Worker v2 con stale-while-revalidate y sincronización en IndexedDB.                                                                                                         |
 
 ---
 
@@ -74,40 +75,40 @@
 
 ### Backend & Servicios
 
-| Componente               | Tecnología          | Rol / Función                                            |
-| :----------------------- | :------------------ | :------------------------------------------------------- |
-| **Backend-as-a-Service** | Supabase            | PostgreSQL, Auth, Edge Functions, Cache de APIs, historial |
-| **Edge Functions**       | Deno (Supabase)     | Chatbot IA (`chat`) y limpieza de cache (`cache-cleanup`) |
+| Componente               | Tecnología          | Rol / Función                                                            |
+| :----------------------- | :------------------ | :----------------------------------------------------------------------- |
+| **Backend-as-a-Service** | Supabase            | PostgreSQL, Auth, Edge Functions, Cache de APIs, historial               |
+| **Edge Functions**       | Deno (Supabase)     | Chatbot IA (`chat`) y limpieza de cache (`cache-cleanup`)                |
 | **Chatbot IA**           | Groq Llama 3.1 8B   | Clasificador de intenciones + extracción de entidades + consulta directa |
-| **Servidor**             | Nitro (node-server) | Motor de servidor SSR para Docker/Vercel                 |
-| **Cache**                | Supabase            | Cache de respuestas de APIs externas (IDEAM, NASA, precios) |
+| **Servidor**             | Nitro (node-server) | Motor de servidor SSR para Docker/Vercel                                 |
+| **Cache**                | Supabase            | Cache de respuestas de APIs externas (IDEAM, NASA, precios)              |
 
 ### APIs Externas
 
-| API                        | Costo              | Datos                                                            | Cache            | Enlace Oficial                                         |
-| :------------------------- | :----------------- | :--------------------------------------------------------------- | :--------------- | :----------------------------------------------------- |
-| **Open-Meteo**             | Gratis             | Clima actual, pronóstico 7d, históricos 90d, humedad del suelo, NDVI | No (tiempo real) | [open-meteo.com](https://open-meteo.com)               |
-| **NASA POWER**             | Gratis             | Datos satelitales diarios + índices agroclimáticos (GDD, aridez) | 7 días           | [power.larc.nasa.gov](https://power.larc.nasa.gov)     |
-| **IDEAM (datos.gov.co)**   | Gratis (app token) | Estaciones meteorológicas nacionales reales                      | 24 horas         | [datos.gov.co](https://datos.gov.co)                   |
-| **SoilGrids (ISRIC)**      | Gratis             | Propiedades del suelo a 6 niveles de profundidad                 | No (estático)    | [soilgrids.org](https://soilgrids.org)                 |
-| **Commodity Forecast API** | Gratis             | Precios internacionales de café y cacao                          | 1 hora           | —                                                     |
-| **Groq**                   | Gratis (~30 req/min) | Llama 3.1 8B para clasificación, extracción de entidades y respuestas del chatbot (server-side) | No | [console.groq.com/keys](https://console.groq.com/keys) |
-| **Supabase**               | Gratis/Plan        | PostgreSQL, Auth, Edge Functions, Cache, Historial               | N/A              | [supabase.com](https://supabase.com)                   |
+| API                        | Costo                | Datos                                                                                           | Cache            | Enlace Oficial                                         |
+| :------------------------- | :------------------- | :---------------------------------------------------------------------------------------------- | :--------------- | :----------------------------------------------------- |
+| **Open-Meteo**             | Gratis               | Clima actual, pronóstico 7d, históricos 90d, humedad del suelo, NDVI                            | No (tiempo real) | [open-meteo.com](https://open-meteo.com)               |
+| **NASA POWER**             | Gratis               | Datos satelitales diarios + índices agroclimáticos (GDD, aridez)                                | 7 días           | [power.larc.nasa.gov](https://power.larc.nasa.gov)     |
+| **IDEAM (datos.gov.co)**   | Gratis (app token)   | Estaciones meteorológicas nacionales reales                                                     | 24 horas         | [datos.gov.co](https://datos.gov.co)                   |
+| **SoilGrids (ISRIC)**      | Gratis               | Propiedades del suelo a 6 niveles de profundidad                                                | No (estático)    | [soilgrids.org](https://soilgrids.org)                 |
+| **Commodity Forecast API** | Gratis               | Precios internacionales de café y cacao                                                         | 1 hora           | —                                                      |
+| **Groq**                   | Gratis (~30 req/min) | Llama 3.1 8B para clasificación, extracción de entidades y respuestas del chatbot (server-side) | No               | [console.groq.com/keys](https://console.groq.com/keys) |
+| **Supabase**               | Gratis/Plan          | PostgreSQL, Auth, Edge Functions, Cache, Historial                                              | N/A              | [supabase.com](https://supabase.com)                   |
 
 ---
 
 ## Fuentes de Datos
 
-|  #  | Fuente                | Datos                                                                                                                 | Enlace Oficial                                             |
-| :-: | :-------------------- | :-------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------- |
-|  1  | **Open-Meteo API**    | Clima en tiempo real: temperatura, precipitación, viento, radiación solar, humedad, UV, pronóstico 7d, históricos 90d, NDVI | [open-meteo.com](https://open-meteo.com)                   |
-|  2  | **SoilGrids (ISRIC)** | Propiedades del suelo a 6 niveles: pH, materia orgánica, textura, carbono orgánico, nitrogen, CIC                     | [soilgrids.org](https://soilgrids.org)                     |
-|  3  | **IDEAM**             | Series climáticas históricas de Colombia (datos.gov.co Socrata)                                                       | [datos.gov.co](https://datos.gov.co)                       |
-|  4  | **NASA POWER**        | Datos satelitales diarios + índices agroclimáticos (GDD, aridez, estrés UV, demanda hídrica)                          | [power.larc.nasa.gov](https://power.larc.nasa.gov)         |
-|  5  | **Commodity Forecast**| Precios internacionales de café (Arabica) y cacao                                                                     | —                                                          |
-|  6  | **Datos GeoJSON**     | **87** municipios de **Santander** en `src/data/colombia-municipios.geo.json`                                        | [IGAC](https://igac.gov.co) / [geoportal.dane.gov.co](https://geoportal.dane.gov.co) |
-|  7  | **Groq**              | LLM Llama 3.1 8B para el chatbot (Edge Function `supabase/functions/chat`)                                            | [console.groq.com/keys](https://console.groq.com/keys)     |
-|  8  | **Supabase**          | Cache de APIs y historial de análisis (`api_cache`, `analysis_history`)                                               | [supabase.com](https://supabase.com)                       |
+|  #  | Fuente                 | Datos                                                                                                                       | Enlace Oficial                                                                       |
+| :-: | :--------------------- | :-------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------- |
+|  1  | **Open-Meteo API**     | Clima en tiempo real: temperatura, precipitación, viento, radiación solar, humedad, UV, pronóstico 7d, históricos 90d, NDVI | [open-meteo.com](https://open-meteo.com)                                             |
+|  2  | **SoilGrids (ISRIC)**  | Propiedades del suelo a 6 niveles: pH, materia orgánica, textura, carbono orgánico, nitrogen, CIC                           | [soilgrids.org](https://soilgrids.org)                                               |
+|  3  | **IDEAM**              | Series climáticas históricas de Colombia (datos.gov.co Socrata)                                                             | [datos.gov.co](https://datos.gov.co)                                                 |
+|  4  | **NASA POWER**         | Datos satelitales diarios + índices agroclimáticos (GDD, aridez, estrés UV, demanda hídrica)                                | [power.larc.nasa.gov](https://power.larc.nasa.gov)                                   |
+|  5  | **Commodity Forecast** | Precios internacionales de café (Arabica) y cacao                                                                           | —                                                                                    |
+|  6  | **Datos GeoJSON**      | **87** municipios de **Santander** en `src/data/colombia-municipios.geo.json`                                               | [IGAC](https://igac.gov.co) / [geoportal.dane.gov.co](https://geoportal.dane.gov.co) |
+|  7  | **Groq**               | LLM Llama 3.1 8B para el chatbot (Edge Function `supabase/functions/chat`)                                                  | [console.groq.com/keys](https://console.groq.com/keys)                               |
+|  8  | **Supabase**           | Cache de APIs y historial de análisis (`api_cache`, `analysis_history`)                                                     | [supabase.com](https://supabase.com)                                                 |
 
 ---
 
@@ -256,9 +257,11 @@ NITRO_PRESET=node-server
 > **Importante:** Las variables `VITE_*` se inyectan en el bundle del cliente **en tiempo de build**. Deben estar presentes al ejecutar `npm run build` (o como build args de Docker). No exponer `GROQ_API_KEY` en el frontend.
 
 > **Nota:** La API Key de Groq (`GROQ_API_KEY`) se configura como secreto en las Edge Functions de Supabase (server-side):
+>
 > ```bash
 > supabase secrets set GROQ_API_KEY=tu-groq-key
 > ```
+>
 > Nunca se expone al frontend.
 
 ### Base de Datos
@@ -292,12 +295,12 @@ docker run -p 3000:3000 sembradata
 
 ### Build args (Docker)
 
-| Argumento                | Requerido | Descripción                                  |
-| :----------------------- | :-------: | :------------------------------------------- |
-| `VITE_SUPABASE_URL`      |    Si     | URL del proyecto Supabase                    |
-| `VITE_SUPABASE_ANON_KEY` |    Si     | Clave anónima de Supabase                    |
-| `VITE_IDEAM_APP_TOKEN`   |    No     | Token de datos.gov.co para IDEAM             |
-| `VITE_SENTRY_DSN`        |    No     | DSN de Sentry                                 |
+| Argumento                | Requerido | Descripción                      |
+| :----------------------- | :-------: | :------------------------------- |
+| `VITE_SUPABASE_URL`      |    Si     | URL del proyecto Supabase        |
+| `VITE_SUPABASE_ANON_KEY` |    Si     | Clave anónima de Supabase        |
+| `VITE_IDEAM_APP_TOKEN`   |    No     | Token de datos.gov.co para IDEAM |
+| `VITE_SENTRY_DSN`        |    No     | DSN de Sentry                    |
 
 > Los secrets (como `GROQ_API_KEY`) nunca van a la imagen; se configuran en Supabase.
 
@@ -340,14 +343,14 @@ npm run validate
 
 ### Métricas de Calidad (v0.5.1)
 
-| Métrica                   | Valor                  |
-| :------------------------ | :--------------------- |
-| Tests unitarios/componen. | 145/145 passing        |
+| Métrica                   | Valor                                                         |
+| :------------------------ | :------------------------------------------------------------ |
+| Tests unitarios/componen. | 145/145 passing                                               |
 | Tests E2E                 | 31 casos (`e2e/`, requiere `npx playwright install chromium`) |
-| Errores TypeScript        | 0                      |
-| Errores ESLint            | 0 (6 warnings)         |
-| Build                     | OK (Nitro `node-server`, salida `.output/`) |
-| Cobertura GeoJSON         | 87 municipios de Santander |
+| Errores TypeScript        | 0                                                             |
+| Errores ESLint            | 0 (6 warnings)                                                |
+| Build                     | OK (Nitro `node-server`, salida `.output/`)                   |
+| Cobertura GeoJSON         | 87 municipios de Santander                                    |
 
 ---
 

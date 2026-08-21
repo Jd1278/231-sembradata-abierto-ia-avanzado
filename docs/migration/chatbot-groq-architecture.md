@@ -77,16 +77,16 @@ Usuario → ChatbotPanel → Edge Function `chat` (Supabase)
 
 ### 4. Archivos involucrados
 
-| Archivo | Rol |
-|---------|-----|
-| `supabase/functions/chat/index.ts` | Edge Function principal (clasificación + Groq) |
-| `src/services/chatbot.ts` | Sugerencias de preguntas para el panel |
-| `src/services/chatbot-rag.ts` | Contexto RAG + detección de intención |
-| `src/services/intent-classifier.ts` | Clasificador heurístico de intenciones |
-| `src/services/entity-extractor.ts` | Extracción de entidades por regex (sin API) |
-| `src/services/knowledge-base.ts` | 50+ entradas de conocimiento |
-| `src/services/data-orchestrator.ts` | Orquestador de datos climáticos y suelo |
-| `.env` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
+| Archivo                             | Rol                                            |
+| ----------------------------------- | ---------------------------------------------- |
+| `supabase/functions/chat/index.ts`  | Edge Function principal (clasificación + Groq) |
+| `src/services/chatbot.ts`           | Sugerencias de preguntas para el panel         |
+| `src/services/chatbot-rag.ts`       | Contexto RAG + detección de intención          |
+| `src/services/intent-classifier.ts` | Clasificador heurístico de intenciones         |
+| `src/services/entity-extractor.ts`  | Extracción de entidades por regex (sin API)    |
+| `src/services/knowledge-base.ts`    | 50+ entradas de conocimiento                   |
+| `src/services/data-orchestrator.ts` | Orquestador de datos climáticos y suelo        |
+| `.env`                              | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`  |
 
 ## Despliegue de la Edge Function
 

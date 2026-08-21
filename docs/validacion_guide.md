@@ -65,15 +65,15 @@ npm run validate
 
 ### Verificar integraciones
 
-| API            | Endpoint        | Verificacion                               |
-| -------------- | --------------- | ------------------------------------------ |
-| Open-Meteo     | /v1/forecast    | Datos climaticos actuales + pronostico 7d  |
-| NASA POWER     | /temporal/daily | Datos satelitales + indices agroclimaticos |
-| IDEAM          | datos.gov.co    | Estaciones meteorologicas reales           |
-| SoilGrids      | /soilgrids/v2.0 | Propiedades del suelo a 6 profundidades    |
-| Commodity Forecast | commodityforecasts.co.uk | Precios cafe y cacao              |
-| Groq (chatbot) | api.groq.com    | Respuestas del chatbot (server-side)       |
-| Supabase       | supabase.co     | Cache de APIs, historial, Edge Functions   |
+| API                | Endpoint                 | Verificacion                               |
+| ------------------ | ------------------------ | ------------------------------------------ |
+| Open-Meteo         | /v1/forecast             | Datos climaticos actuales + pronostico 7d  |
+| NASA POWER         | /temporal/daily          | Datos satelitales + indices agroclimaticos |
+| IDEAM              | datos.gov.co             | Estaciones meteorologicas reales           |
+| SoilGrids          | /soilgrids/v2.0          | Propiedades del suelo a 6 profundidades    |
+| Commodity Forecast | commodityforecasts.co.uk | Precios cafe y cacao                       |
+| Groq (chatbot)     | api.groq.com             | Respuestas del chatbot (server-side)       |
+| Supabase           | supabase.co              | Cache de APIs, historial, Edge Functions   |
 
 ## 5. Validacion Etica
 

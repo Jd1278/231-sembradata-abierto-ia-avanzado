@@ -1,26 +1,31 @@
 import { memo, useCallback, useMemo, useRef, useState } from "react";
-import { Minus, Plus, RotateCcw, MapPin } from "lucide-react";
-import { CROP_DATA } from "./data";
-import type { CropKey, Risk } from "@/types/crops";
+import { Minus, Plus, RotateCcw, MapPin, Thermometer, Droplets, Mountain } from "lucide-react";
+import { CROP_DATA, getOfficialAltitude } from "./data";
+import type { CropKey, RiskLevel } from "@/types/crops";
 import { getFeaturesForDepartment, VIEW_H, VIEW_W, type FeatureResult } from "./municipios";
 import { cn } from "@/lib/utils";
 import { SANTANDER } from "@/data/departamentos";
 import type { MunicipalityClimateState } from "@/services/climate-state";
 
-const RISK_FILL: Record<Risk, string> = {
+const RISK_FILL: Record<RiskLevel, string> = {
   Bajo: "fill-risk-low",
   Medio: "fill-risk-med",
   Alto: "fill-risk-high",
+  NoData: "fill-muted/70",
 };
-const RISK_TEXT: Record<Risk, string> = {
+
+const RISK_TEXT: Record<RiskLevel, string> = {
   Bajo: "text-risk-low",
   Medio: "text-risk-med",
   Alto: "text-risk-high",
+  NoData: "text-muted-foreground",
 };
-const RISK_DOT: Record<Risk, string> = {
+
+const RISK_DOT: Record<RiskLevel, string> = {
   Bajo: "bg-risk-low",
   Medio: "bg-risk-med",
   Alto: "bg-risk-high",
+  NoData: "bg-muted-foreground/50",
 };
 
 interface Props {
@@ -156,7 +161,7 @@ export const SantanderMap = memo(function SantanderMap({
             {features.map((m, idx) => {
               const isSelected = m.name === selected;
               const state = climateStates?.[m.name];
-              const risk = state?.level ?? m.risk[crop];
+              const risk: RiskLevel = state?.level ?? (climateReady ? "NoData" : "NoData");
               const isHover = m.id === hover;
               const isFocused = idx === focusedIdx;
               const isFiltered = !filteredNames || filteredNames.has(m.name);
@@ -168,10 +173,10 @@ export const SantanderMap = memo(function SantanderMap({
                   tabIndex={-1}
                   aria-label={`${m.name}, riesgo ${risk}`}
                   className={cn(
-                    climateReady ? RISK_FILL[risk] : "fill-muted",
+                    RISK_FILL[risk] ?? "fill-muted/70",
                     "cursor-pointer stroke-background transition-all duration-200 ease-out",
-                    "hover:[filter:brightness(1.1)]",
-                    isHover || isFocused ? "opacity-100" : isFiltered ? "opacity-85" : "opacity-20",
+                    "hover:[filter:brightness(1.15)]",
+                    isHover || isFocused ? "opacity-100" : isFiltered ? "opacity-90" : "opacity-25",
                   )}
                   strokeWidth={isSelected ? 1.4 : isFocused ? 1.2 : 0.6}
                   stroke={isSelected || isFocused ? "currentColor" : undefined}
@@ -288,10 +293,12 @@ export const SantanderMap = memo(function SantanderMap({
             {features.length === 1 ? "municipio" : "municipios"}
           </p>
           <div className="flex items-center gap-3 text-[11px]">
-            {(["Bajo", "Medio", "Alto"] as Risk[]).map((r) => (
+            {(["Bajo", "Medio", "Alto", "NoData"] as RiskLevel[]).map((r) => (
               <span key={r} className="flex items-center gap-1.5">
                 <span className={cn("h-2.5 w-2.5 rounded-sm", RISK_DOT[r])} />
-                <span className="font-medium text-foreground">{r}</span>
+                <span className="font-medium text-foreground">
+                  {r === "NoData" ? "Sin Datos" : r}
+                </span>
               </span>
             ))}
           </div>
@@ -308,15 +315,21 @@ export const SantanderMap = memo(function SantanderMap({
         {/* Floating tooltip */}
         {hover && tip && activeFeature && (
           <div
-            className="pointer-events-none absolute z-20 min-w-[240px] -translate-x-1/2 -translate-y-full rounded-xl border border-border bg-popover px-3 py-2.5 text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95"
+            className="pointer-events-none absolute z-20 min-w-[250px] -translate-x-1/2 -translate-y-full rounded-xl border border-border bg-popover px-3 py-2.5 text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95"
             style={{
               left: Math.max(130, Math.min(tip.x, 9999)),
               top: Math.max(90, tip.y - 12),
             }}
           >
-            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <MapPin className="h-3 w-3" />
-              {SANTANDER.nombre}
+            <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <MapPin className="h-3 w-3" />
+                {SANTANDER.nombre}
+              </span>
+              <span className="flex items-center gap-1">
+                <Mountain className="h-3 w-3" />
+                {getOfficialAltitude(activeFeature.name)} msnm
+              </span>
             </div>
             <p className="mt-0.5 text-sm font-bold text-foreground">{activeFeature.name}</p>
             <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-2 text-xs">
@@ -325,35 +338,58 @@ export const SantanderMap = memo(function SantanderMap({
                 <p className="font-semibold text-foreground">{CROP_DATA[crop].label}</p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground">Rendimiento</p>
+                <p className="text-[10px] text-muted-foreground">Rendimiento Base</p>
                 <p className="font-semibold text-foreground">
-                  {(CROP_DATA[crop].baseYield * activeFeature.factor).toFixed(2)} t/ha
+                  {CROP_DATA[crop].baseYield.toFixed(2)} t/ha
                 </p>
               </div>
+
+              {climateStates?.[activeFeature.name]?.climate && (
+                <>
+                  <div>
+                    <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <Thermometer className="h-2.5 w-2.5" /> Temp. Media
+                    </p>
+                    <p className="font-semibold text-foreground">
+                      {climateStates[activeFeature.name].climate?.temperature?.toFixed(1) ?? "—"}°C
+                    </p>
+                  </div>
+                  <div>
+                    <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <Droplets className="h-2.5 w-2.5" /> Precipitación
+                    </p>
+                    <p className="font-semibold text-foreground">
+                      {climateStates[activeFeature.name].climate?.precipitation?.toFixed(1) ?? "—"}{" "}
+                      mm/d
+                    </p>
+                  </div>
+                </>
+              )}
+
               <div className="col-span-2">
-                <p className="text-[10px] text-muted-foreground">Riesgo climático</p>
+                <p className="text-[10px] text-muted-foreground">Riesgo agroclimático</p>
                 <p
                   className={cn(
                     "flex items-center gap-1.5 text-sm font-semibold",
-                    RISK_TEXT[
-                      climateStates?.[activeFeature.name]?.level ?? activeFeature.risk[crop]
-                    ],
+                    RISK_TEXT[climateStates?.[activeFeature.name]?.level ?? "NoData"],
                   )}
                 >
                   <span
                     className={cn(
                       "h-2 w-2 rounded-full",
-                      RISK_DOT[
-                        climateStates?.[activeFeature.name]?.level ?? activeFeature.risk[crop]
-                      ],
+                      RISK_DOT[climateStates?.[activeFeature.name]?.level ?? "NoData"],
                     )}
                   />
-                  {climateStates?.[activeFeature.name]?.level ?? activeFeature.risk[crop]}
-                  {climateStates?.[activeFeature.name] && (
-                    <span className="text-[10px] text-muted-foreground font-normal ml-1">
-                      ({climateStates[activeFeature.name].score} pts)
-                    </span>
-                  )}
+                  {climateStates?.[activeFeature.name]?.level === "NoData"
+                    ? "Sin Datos"
+                    : (climateStates?.[activeFeature.name]?.level ?? "Sin Datos")}
+                  {climateStates?.[activeFeature.name]?.riskScore !== null &&
+                    climateStates?.[activeFeature.name]?.riskScore !== undefined && (
+                      <span className="text-[10px] text-muted-foreground font-normal ml-1">
+                        (Riesgo: {(climateStates[activeFeature.name].riskScore! * 100).toFixed(0)}%
+                        · Aptitud: {climateStates[activeFeature.name].score} pts)
+                      </span>
+                    )}
                 </p>
               </div>
             </div>
@@ -363,7 +399,7 @@ export const SantanderMap = memo(function SantanderMap({
         {loadingClimateStates && (
           <div className="absolute inset-0 z-10 grid place-items-center bg-muted/80 backdrop-blur-sm">
             <p className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
-              Procesando estado climático definitivo…
+              Procesando estado climático de Santander…
             </p>
           </div>
         )}

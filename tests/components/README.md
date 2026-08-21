@@ -4,21 +4,21 @@
 
 El proyecto implementa una **estrategia de pruebas en 3 capas**:
 
-| Capa | Herramienta | Ubicación | Propósito |
-|------|------------|-----------|-----------|
-| **Unitarias** | Vitest | `tests/unit/` | Lógica de negocio, servicios, utilidades |
+| Capa            | Herramienta                    | Ubicación           | Propósito                                     |
+| --------------- | ------------------------------ | ------------------- | --------------------------------------------- |
+| **Unitarias**   | Vitest                         | `tests/unit/`       | Lógica de negocio, servicios, utilidades      |
 | **Componentes** | Vitest + React Testing Library | `tests/components/` | Comportamiento visual, interacciones, estados |
-| **E2E** | Playwright | `e2e/` | Flujos completos de usuario en navegador |
+| **E2E**         | Playwright                     | `e2e/`              | Flujos completos de usuario en navegador      |
 
 ### Diferencia entre pruebas unitarias y por componentes
 
-| Aspecto | Unitarias | Componentes |
-|---------|-----------|-------------|
-| **Qué validan** | Funciones, lógica, datos | Renderizado, interacciones, estados UI |
-| **Dependencias** | Ninguna (mocks de servicios externos) | jsdom simula el navegador |
-| **React** | No renderizan componentes | Renderizan componentes con RTL |
-| **Velocidad** | ~15s | ~45s (incluye setup de jsdom) |
-| **Ejemplo** | `expect(sum(1,2)).toBe(3)` | `expect(getByText('Guardar')).toBeInTheDocument()` |
+| Aspecto          | Unitarias                             | Componentes                                        |
+| ---------------- | ------------------------------------- | -------------------------------------------------- |
+| **Qué validan**  | Funciones, lógica, datos              | Renderizado, interacciones, estados UI             |
+| **Dependencias** | Ninguna (mocks de servicios externos) | jsdom simula el navegador                          |
+| **React**        | No renderizan componentes             | Renderizan componentes con RTL                     |
+| **Velocidad**    | ~15s                                  | ~45s (incluye setup de jsdom)                      |
+| **Ejemplo**      | `expect(sum(1,2)).toBe(3)`            | `expect(getByText('Guardar')).toBeInTheDocument()` |
 
 ## Estructura de Carpetas
 
@@ -73,16 +73,16 @@ test("ejemplo", async () => {
 
 ## Cobertura de Pruebas (8 componentes, 40 tests)
 
-| Componente | Tests | Cubre |
-|------------|-------|-------|
-| `FilterBlock` | 3 | Renderizado con/sin icono, children complejos |
-| `KpiCard` | 6 | Props, variantes de color (primary/sky/earth), edge cases |
-| `RiskKpiCard` | 6 | 3 estados de riesgo, clases CSS, icono |
-| `MapLegend` | 3 | 3 niveles, dots, data-testid |
-| `OfflineIndicator` | 3 | Estado online/offline, icono |
-| `SectionErrorBoundary` | 5 | Error/éxito, fallback, botón reintentar |
-| `AdvancedFilters` | 7 | Expandir/colapsar, cambio de filtros, reset |
-| `HistoryPanel` | 5 | Apertura/cierre, datos mock, vacío, Escape |
+| Componente             | Tests | Cubre                                                     |
+| ---------------------- | ----- | --------------------------------------------------------- |
+| `FilterBlock`          | 3     | Renderizado con/sin icono, children complejos             |
+| `KpiCard`              | 6     | Props, variantes de color (primary/sky/earth), edge cases |
+| `RiskKpiCard`          | 6     | 3 estados de riesgo, clases CSS, icono                    |
+| `MapLegend`            | 3     | 3 niveles, dots, data-testid                              |
+| `OfflineIndicator`     | 3     | Estado online/offline, icono                              |
+| `SectionErrorBoundary` | 5     | Error/éxito, fallback, botón reintentar                   |
+| `AdvancedFilters`      | 7     | Expandir/colapsar, cambio de filtros, reset               |
+| `HistoryPanel`         | 5     | Apertura/cierre, datos mock, vacío, Escape                |
 
 ## Cómo Crear una Nueva Prueba por Componente
 

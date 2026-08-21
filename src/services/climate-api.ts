@@ -1,3 +1,9 @@
+import {
+  calculateClimateMetrics,
+  type CalculatedClimateMetrics,
+  type DataQuality,
+} from "./climate-calculator";
+
 export interface MonthlyPrecipitation {
   year: number;
   month: number;
@@ -20,6 +26,14 @@ export interface ClimateData {
   dailyData: DailyClimate[];
   monthlyPrecipitation: MonthlyPrecipitation[];
   agriculturalIndex: AgriculturalIndices;
+  metrics?: CalculatedClimateMetrics;
+  thermalRange?: number | null;
+  temperatureStdDev?: number | null;
+  precipitationStdDev?: number | null;
+  precipitationCv?: number | null;
+  waterBalance?: number | null;
+  waterDeficit?: number | null;
+  dataQuality?: DataQuality;
 }
 
 export interface DailyClimate {
@@ -31,6 +45,7 @@ export interface DailyClimate {
   windSpeed: number;
   solarRad: number;
   uvIndex: number;
+  et0?: number;
 }
 
 export interface HistoricalSummary {
@@ -58,7 +73,7 @@ const FETCH_TIMEOUT_MS = 15000;
 const MAX_RETRIES = 2;
 
 const responseCache = new Map<string, { data: unknown; at: number }>();
-const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes TTL
 
 function cacheKey(url: string): string {
   return url;
@@ -129,6 +144,7 @@ const DAILY_FIELDS = [
   "temperature_2m_min",
   "precipitation_sum",
   "relative_humidity_2m_mean",
+  "et0_fao_evapotranspiration",
   "wind_speed_10m_mean",
   "shortwave_radiation_sum",
   "uv_index_max",
@@ -164,9 +180,10 @@ function mapDailyData(raw: {
   temperature_2m_min: number[];
   precipitation_sum: number[];
   relative_humidity_2m_mean: number[];
-  wind_speed_10m_mean: number[];
-  shortwave_radiation_sum: number[];
-  uv_index_max: number[];
+  et0_fao_evapotranspiration?: number[];
+  wind_speed_10m_mean?: number[];
+  shortwave_radiation_sum?: number[];
+  uv_index_max?: number[];
 }): DailyClimate[] {
   const result: DailyClimate[] = [];
   for (let i = 0; i < raw.time.length; i++) {
@@ -180,6 +197,7 @@ function mapDailyData(raw: {
       windSpeed: raw.wind_speed_10m_mean?.[i] ?? 0,
       solarRad: raw.shortwave_radiation_sum?.[i] ?? 0,
       uvIndex: raw.uv_index_max?.[i] ?? 0,
+      et0: raw.et0_fao_evapotranspiration?.[i],
     });
   }
   return result;
@@ -213,8 +231,8 @@ export function aggregateMonthlyPrecipitation(dailyData: DailyClimate[]): Monthl
 function computeAgriculturalIndices(
   dailyData: DailyClimate[],
   avgTemp: number,
-  avgPrecip: number,
-  avgHumidity: number,
+  _avgPrecip: number,
+  _avgHumidity: number,
   monthlyPrecipitation: MonthlyPrecipitation[],
 ): AgriculturalIndices {
   const gdd = dailyData.reduce((sum, d) => {
@@ -222,39 +240,37 @@ function computeAgriculturalIndices(
     return sum + Math.max(0, avg - 10);
   }, 0);
 
-  // Hargreaves PET (mm/day)
-  // Ra = extraterrestrial radiation in mm/day for the latitude.
-  // For Santander, Colombia (~6.5°N): Ra ≈ 4.5 mm/day (annual avg)
   const Ra = 4.5;
   let totalPet = 0;
   for (const d of dailyData) {
-    const tMean = (d.tempMax + d.tempMin) / 2;
-    const tRange = Math.max(0.1, d.tempMax - d.tempMin);
-    totalPet += 0.0023 * Math.sqrt(tRange) * (tMean + 17.8) * Ra;
+    if (d.et0 !== undefined && d.et0 !== null && Number.isFinite(d.et0)) {
+      totalPet += d.et0;
+    } else {
+      const tMean = (d.tempMax + d.tempMin) / 2;
+      const tRange = Math.max(0.1, d.tempMax - d.tempMin);
+      totalPet += 0.0023 * Math.sqrt(tRange) * (tMean + 17.8) * Ra;
+    }
   }
   const totalPrecip = dailyData.reduce((sum, d) => sum + d.precip, 0);
 
-  // Use the most recent month's actual accumulated precipitation for drought risk
   const lastMonth =
     monthlyPrecipitation.length > 0 ? monthlyPrecipitation[monthlyPrecipitation.length - 1] : null;
   const recentMonthlyPrecip = lastMonth ? lastMonth.precipitation : 0;
 
-  // Aridity index (De Martonne-inspired): P/PET
-  // < 0.3 = árido, 0.3–0.5 = semi-árido, 0.5–0.75 = semi-húmedo, 0.75–1 = sub-húmedo, > 1 = húmedo
   const ratio = totalPet > 0 ? totalPrecip / totalPet : totalPrecip > 0 ? 2 : 0;
 
-  // Moisture stress: fraction of days where PET > precip (dry days)
   let dryDays = 0;
   for (const d of dailyData) {
-    const tMean = (d.tempMax + d.tempMin) / 2;
-    const tRange = Math.max(0.1, d.tempMax - d.tempMin);
-    const dailyPet = 0.0023 * Math.sqrt(tRange) * (tMean + 17.8) * Ra;
-    if (d.precip < dailyPet * 0.5) dryDays++;
+    const pet =
+      d.et0 ??
+      0.0023 *
+        Math.sqrt(Math.max(0.1, d.tempMax - d.tempMin)) *
+        ((d.tempMax + d.tempMin) / 2 + 17.8) *
+        Ra;
+    if (d.precip < pet * 0.5) dryDays++;
   }
   const moistureStress = dailyData.length > 0 ? dryDays / dailyData.length : 0;
 
-  // Drought risk based on actual monthly precipitation (mm/month)
-  // < 50 mm/month = severe drought risk, < 100 mm/month = moderate, else low
   return {
     GrowingDegreeDays: +gdd.toFixed(1),
     aridityIndex: +Math.min(8, ratio).toFixed(2),
@@ -308,6 +324,21 @@ export async function fetchCurrentClimate(
   if (!dailyRaw?.time) throw new Error("Invalid climate API response: missing daily.time");
   const dailyData = mapDailyData(dailyRaw as Parameters<typeof mapDailyData>[0]);
 
+  const metrics = calculateClimateMetrics(
+    dailyData.map((d) => ({
+      date: d.date,
+      tempMax: d.tempMax,
+      tempMin: d.tempMin,
+      precip: d.precip,
+      humidity: d.humidity,
+      windSpeed: d.windSpeed,
+      solarRad: d.solarRad,
+      uvIndex: d.uvIndex,
+      et0: d.et0,
+    })),
+    { source: "Open-Meteo", expectedDays: effectivePastDays + 7, latitude: lat },
+  );
+
   let tempSum = 0,
     precipSum = 0,
     humSum = 0,
@@ -328,15 +359,14 @@ export async function fetchCurrentClimate(
   const avgPrecip = len ? precipSum / len : 0;
   const avgHumidity = len ? humSum / len : 0;
   const avgSolarRad = len ? solarSum / len : 0;
-  const gdd = Math.max(0, avgTemp - 10);
 
   const monthlyPrecipitation = aggregateMonthlyPrecipitation(dailyData);
 
   return {
-    temperature: current.temperature_2m ?? avgTemp,
+    temperature: current.temperature_2m ?? metrics.meanTemperature ?? avgTemp,
     temperatureMax: len ? maxTemp : (current.temperature_2m ?? 0),
     temperatureMin: len ? minTemp : (current.temperature_2m ?? 0),
-    humidity: current.relative_humidity_2m ?? avgHumidity,
+    humidity: current.relative_humidity_2m ?? metrics.meanHumidity ?? avgHumidity,
     precipitation: avgPrecip || (current.precipitation ?? 0),
     windSpeed: current.wind_speed_10m ?? 0,
     windDirection: current.wind_direction_10m ?? 0,
@@ -344,7 +374,7 @@ export async function fetchCurrentClimate(
     uvIndex: current.uv_index ?? 0,
     cloudCover: current.cloud_cover ?? 0,
     pressure: current.surface_pressure ?? 1013,
-    evapotranspiration: +(gdd * 0.15).toFixed(1),
+    evapotranspiration: metrics.evapotranspiration ?? 0,
     dailyData,
     monthlyPrecipitation,
     agriculturalIndex: computeAgriculturalIndices(
@@ -354,6 +384,14 @@ export async function fetchCurrentClimate(
       avgHumidity,
       monthlyPrecipitation,
     ),
+    metrics,
+    thermalRange: metrics.thermalRange,
+    temperatureStdDev: metrics.temperatureStdDev,
+    precipitationStdDev: metrics.precipitationStdDev,
+    precipitationCv: metrics.precipitationCv,
+    waterBalance: metrics.waterBalance,
+    waterDeficit: metrics.waterDeficit,
+    dataQuality: metrics.dataQuality,
   };
 }
 

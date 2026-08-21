@@ -158,7 +158,7 @@ export function Dashboard() {
         name: m.name,
         geolat: m.geolat,
         geolng: m.geolng,
-        altitude: computeAltitude(m.factor),
+        altitude: m.altitude ?? computeAltitude(m.name),
       })),
       crop,
     )

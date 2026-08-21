@@ -16,27 +16,27 @@
 
 ## Datos de Mercado
 
-| Fuente                 | URL                                  | Costo  | Variables                                                                | Cache  |
-| ---------------------- | ------------------------------------ | ------ | ------------------------------------------------------------------------ | ------ |
-| Commodity Forecast API | https://www.commodityforecasts.co.uk | Gratis | Precios internacionales de café (Arabica) y cacao + riesgo climático     | 1 hora |
+| Fuente                 | URL                                  | Costo  | Variables                                                            | Cache  |
+| ---------------------- | ------------------------------------ | ------ | -------------------------------------------------------------------- | ------ |
+| Commodity Forecast API | https://www.commodityforecasts.co.uk | Gratis | Precios internacionales de café (Arabica) y cacao + riesgo climático | 1 hora |
 
 ## Datos Geoespaciales
 
-| Fuente           | URL                     | Formato      | Descripción                                        |
-| ---------------- | ----------------------- | ------------ | -------------------------------------------------- |
-| DANE - Divipola  | https://www.dane.gov.co | JSON/GeoJSON | Límites municipales del departamento de Santander  |
-| GeoJSON Colombia | Archivo local           | GeoJSON      | Departamento de Santander para visualización SVG |
+| Fuente           | URL                     | Formato      | Descripción                                       |
+| ---------------- | ----------------------- | ------------ | ------------------------------------------------- |
+| DANE - Divipola  | https://www.dane.gov.co | JSON/GeoJSON | Límites municipales del departamento de Santander |
+| GeoJSON Colombia | Archivo local           | GeoJSON      | Departamento de Santander para visualización SVG  |
 
 ## Datos de Riesgo Agroclimático
 
-| Fuente          | Descripción                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------- |
-| NASA POWER      | Índices agroclimáticos (GDD, aridez, estrés hídrico) calculados a partir de datos satelitales     |
+| Fuente              | Descripción                                                                                                       |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| NASA POWER          | Índices agroclimáticos (GDD, aridez, estrés hídrico) calculados a partir de datos satelitales                     |
 | Motor de predicción | Modelo de riesgo (sequía, helada, plaga) combinando clima, suelo y cultivo en `src/services/prediction-engine.ts` |
 
 ## IA y Backend
 
-| Fuente          | Descripción                                                                    |
-| --------------- | ------------------------------------------------------------------------------ |
+| Fuente              | Descripción                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------- |
 | Groq (Llama 3.1 8B) | Chatbot con RAG sobre la base de conocimiento local (server-side, Edge Function de Supabase) |
-| Supabase        | PostgreSQL + Edge Functions + caché de APIs con TTL y control de concurrencia  |
+| Supabase            | PostgreSQL + Edge Functions + caché de APIs con TTL y control de concurrencia                |

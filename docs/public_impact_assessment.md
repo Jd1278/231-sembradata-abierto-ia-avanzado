@@ -32,11 +32,11 @@
 
 ## Mitigación de Riesgos
 
-| Riesgo                          | Probabilidad | Impacto | Mitigación                                           |
-| ------------------------------- | ------------ | ------- | ---------------------------------------------------- |
-| Sesgo territorial               | Media        | Alto    | Pruebas de equidad automatizadas                     |
+| Riesgo                          | Probabilidad | Impacto | Mitigación                                               |
+| ------------------------------- | ------------ | ------- | -------------------------------------------------------- |
+| Sesgo territorial               | Media        | Alto    | Pruebas de equidad automatizadas                         |
 | Datos incompletos               | Alta         | Medio   | 5 APIs externas + cache con TTL + interpolación temporal |
-| Dependencia de fuentes externas | Media        | Alto    | Múltiples fuentes + cache con TTL + fallback offline |
-| Baja adopción                   | Media        | Medio   | Interfaz intuitiva, PWA, capacitación                |
-| Limitaciones de API             | Baja         | Medio   | Rate limiting + exponential backoff + cache          |
-| Eventos extremos                | Media        | Alto    | Alertas tempranas (Open-Meteo, NASA POWER)           |
+| Dependencia de fuentes externas | Media        | Alto    | Múltiples fuentes + cache con TTL + fallback offline     |
+| Baja adopción                   | Media        | Medio   | Interfaz intuitiva, PWA, capacitación                    |
+| Limitaciones de API             | Baja         | Medio   | Rate limiting + exponential backoff + cache              |
+| Eventos extremos                | Media        | Alto    | Alertas tempranas (Open-Meteo, NASA POWER)               |

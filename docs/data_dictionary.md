@@ -6,7 +6,7 @@
 | ------------------ | ------- | ---------------------------------------- |
 | id                 | uuid    | Identificador único del municipio        |
 | nombre             | text    | Nombre del municipio                     |
-| departamento       | text    | Departamento de Santander, Colombia                 |
+| departamento       | text    | Departamento de Santander, Colombia      |
 | latitud            | numeric | Coordenada latitude                      |
 | longitud           | numeric | Coordenada longitude                     |
 | altitud_msnm       | numeric | Altitud en metros sobre el nivel del mar |
@@ -181,20 +181,20 @@ Historial de análisis de viabilidad realizados por los usuarios. Cada análisis
 
 ### CommodityPrice (Commodity Forecast)
 
-| Campo          | Tipo   | Descripción                                          |
-| -------------- | ------ | ---------------------------------------------------- |
-| crop           | string | Cultivo (cacao, cafe, granadilla)                    |
-| label          | string | Etiqueta del cultivo                                 |
-| price          | number | Precio de pronóstico                                 |
-| unit           | string | Unidad de medida (kg)                                |
-| currency       | string | Moneda (COP)                                         |
-| change         | number | Cambio porcentual                                    |
-| signal         | string | Señal de mercado (Bullish/Bearish/Neutral)           |
-| recommendation | string | Recomendación de siembra                             |
-| climateScore   | number | Score climático (0-100)                              |
-| confidence     | number | Confianza del pronóstico (0-1)                       |
-| reasoning      | string | Razonamiento del pronóstico                          |
-| stressors      | array  | Factores estresantes climáticos por región           |
-| regions        | array  | Regiones con anomalía térmica y score climático      |
-| sources        | array  | Fuentes de datos                                     |
-| forecastedAt   | string | Fecha del pronóstico                                 |
+| Campo          | Tipo   | Descripción                                     |
+| -------------- | ------ | ----------------------------------------------- |
+| crop           | string | Cultivo (cacao, cafe, granadilla)               |
+| label          | string | Etiqueta del cultivo                            |
+| price          | number | Precio de pronóstico                            |
+| unit           | string | Unidad de medida (kg)                           |
+| currency       | string | Moneda (COP)                                    |
+| change         | number | Cambio porcentual                               |
+| signal         | string | Señal de mercado (Bullish/Bearish/Neutral)      |
+| recommendation | string | Recomendación de siembra                        |
+| climateScore   | number | Score climático (0-100)                         |
+| confidence     | number | Confianza del pronóstico (0-1)                  |
+| reasoning      | string | Razonamiento del pronóstico                     |
+| stressors      | array  | Factores estresantes climáticos por región      |
+| regions        | array  | Regiones con anomalía térmica y score climático |
+| sources        | array  | Fuentes de datos                                |
+| forecastedAt   | string | Fecha del pronóstico                            |

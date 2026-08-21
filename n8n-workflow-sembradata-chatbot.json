@@ -79,29 +79,19 @@
   ],
   "connections": {
     "Webhook": {
-      "main": [
-        [{ "node": "Construir Payload", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Construir Payload", "type": "main", "index": 0 }]]
     },
     "Construir Payload": {
-      "main": [
-        [{ "node": "LLM Request", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "LLM Request", "type": "main", "index": 0 }]]
     },
     "LLM Request": {
-      "main": [
-        [{ "node": "Formatear Respuesta", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Formatear Respuesta", "type": "main", "index": 0 }]]
     },
     "Formatear Respuesta": {
-      "main": [
-        []
-      ]
+      "main": [[]]
     },
     "Respuesta Fallback": {
-      "main": [
-        []
-      ]
+      "main": [[]]
     }
   },
   "pinData": {},

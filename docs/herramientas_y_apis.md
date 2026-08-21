@@ -106,11 +106,11 @@ Chatbot:       Groq (Llama 3.1 8B) via Supabase Edge Function + RAG
 
 ### 4.1 Datasets IDEAM usados en el codigo fuente
 
-| Dataset ID | Nombre | Endpoint Socrata | Uso |
-|---|---|---|---|
-| `57sv-p2fu` | IDEAM Estaciones Meteorologicas | `https://www.datos.gov.co/resource/57sv-p2fu.json` | Coordenadas y metadatos de estaciones |
+| Dataset ID  | Nombre                             | Endpoint Socrata                                   | Uso                                          |
+| ----------- | ---------------------------------- | -------------------------------------------------- | -------------------------------------------- |
+| `57sv-p2fu` | IDEAM Estaciones Meteorologicas    | `https://www.datos.gov.co/resource/57sv-p2fu.json` | Coordenadas y metadatos de estaciones        |
 | `uext-mhny` | IDEAM Observaciones Meteorologicas | `https://www.datos.gov.co/resource/uext-mhny.json` | Observaciones historicas (temp, hum, precip) |
-| `53sq-cmp3` | IDEAM Series Historicas Climaticas | `https://www.datos.gov.co/resource/53sq-cmp3.json` | Series temporales para pipeline ETL |
+| `53sq-cmp3` | IDEAM Series Historicas Climaticas | `https://www.datos.gov.co/resource/53sq-cmp3.json` | Series temporales para pipeline ETL          |
 
 ---
 
@@ -180,53 +180,53 @@ Chatbot:       Groq (Llama 3.1 8B) via Supabase Edge Function + RAG
 
 ### Framework y Routing
 
-| Libreria | Version | Funcion | Enlace |
-|---|---|---|---|
-| React | 19.2.0 | Framework de UI declarativo | [react.dev](https://react.dev) |
-| TanStack Start | 1.168.32 | Framework full-stack para React | [tanstack.com/start](https://tanstack.com/start) |
+| Libreria        | Version  | Funcion                         | Enlace                                             |
+| --------------- | -------- | ------------------------------- | -------------------------------------------------- |
+| React           | 19.2.0   | Framework de UI declarativo     | [react.dev](https://react.dev)                     |
+| TanStack Start  | 1.168.32 | Framework full-stack para React | [tanstack.com/start](https://tanstack.com/start)   |
 | TanStack Router | 1.170.16 | Enrutamiento basado en archivos | [tanstack.com/router](https://tanstack.com/router) |
-| TanStack Query | 5.101.1 | Fetching y caching de datos | [tanstack.com/query](https://tanstack.com/query) |
+| TanStack Query  | 5.101.1  | Fetching y caching de datos     | [tanstack.com/query](https://tanstack.com/query)   |
 
 ### UI y Estilos
 
-| Libreria | Version | Funcion | Enlace |
-|---|---|---|---|
-| Tailwind CSS | 4.2.1 | Framework CSS utility-first | [tailwindcss.com](https://tailwindcss.com) |
-| Radix UI | 1.x | Componentes UI accesibles | [radix-ui.com](https://www.radix-ui.com) |
-| shadcn/ui | (via Radix) | Componentes UI pre-construidos | [ui.shadcn.com](https://ui.shadcn.com) |
-| Lucide React | 0.575.0 | Iconografia SVG | [lucide.dev](https://lucide.dev) |
-| class-variance-authority | 0.7.1 | Variantes de componentes | [cva.docs](https://cva.docs) |
-| clsx | 2.1.1 | Constructores de clases condicionales | [github.com/lukeed/clsx](https://github.com/lukeed/clsx) |
-| tailwind-merge | 3.5.0 | Fusion de clases Tailwind | [github.com/dcastil/tailwind-merge](https://github.com/dcastil/tailwind-merge) |
+| Libreria                 | Version     | Funcion                               | Enlace                                                                         |
+| ------------------------ | ----------- | ------------------------------------- | ------------------------------------------------------------------------------ |
+| Tailwind CSS             | 4.2.1       | Framework CSS utility-first           | [tailwindcss.com](https://tailwindcss.com)                                     |
+| Radix UI                 | 1.x         | Componentes UI accesibles             | [radix-ui.com](https://www.radix-ui.com)                                       |
+| shadcn/ui                | (via Radix) | Componentes UI pre-construidos        | [ui.shadcn.com](https://ui.shadcn.com)                                         |
+| Lucide React             | 0.575.0     | Iconografia SVG                       | [lucide.dev](https://lucide.dev)                                               |
+| class-variance-authority | 0.7.1       | Variantes de componentes              | [cva.docs](https://cva.docs)                                                   |
+| clsx                     | 2.1.1       | Constructores de clases condicionales | [github.com/lukeed/clsx](https://github.com/lukeed/clsx)                       |
+| tailwind-merge           | 3.5.0       | Fusion de clases Tailwind             | [github.com/dcastil/tailwind-merge](https://github.com/dcastil/tailwind-merge) |
 
 ### Charts y Visualizacion
 
-| Libreria | Version | Funcion | Enlace |
-|---|---|---|---|
-| Recharts | 2.15.4 | Graficos React basados en D3 | [recharts.org](https://recharts.org) |
-| jsPDF | 4.2.1 | Generacion de PDFs en cliente | [parall.ax/products/jspdf](https://parall.ax/products/jspdf) |
-| html2canvas | (via jspdf) | Captura de HTML a imagen | [html2canvas.hertzen.com](https://html2canvas.hertzen.com) |
-| SheetJS (xlsx) | 0.18.5 | Exportacion a Excel | [sheetjs.com](https://sheetjs.com) |
+| Libreria       | Version     | Funcion                       | Enlace                                                       |
+| -------------- | ----------- | ----------------------------- | ------------------------------------------------------------ |
+| Recharts       | 2.15.4      | Graficos React basados en D3  | [recharts.org](https://recharts.org)                         |
+| jsPDF          | 4.2.1       | Generacion de PDFs en cliente | [parall.ax/products/jspdf](https://parall.ax/products/jspdf) |
+| html2canvas    | (via jspdf) | Captura de HTML a imagen      | [html2canvas.hertzen.com](https://html2canvas.hertzen.com)   |
+| SheetJS (xlsx) | 0.18.5      | Exportacion a Excel           | [sheetjs.com](https://sheetjs.com)                           |
 
 ### Formularios y Validacion
 
-| Libreria | Version | Funcion | Enlace |
-|---|---|---|---|
-| React Hook Form | 7.82.0 | Formularios React performantes | [react-hook-form.com](https://react-hook-form.com) |
-| Zod | 3.24.2 | Validacion de esquemas TypeScript-first | [zod.dev](https://zod.dev) |
-| @hookform/resolvers | 5.2.2 | Integracion Zod + React Hook Form | [github.com/react-hook-form/resolvers](https://github.com/react-hook-form/resolvers) |
+| Libreria            | Version | Funcion                                 | Enlace                                                                               |
+| ------------------- | ------- | --------------------------------------- | ------------------------------------------------------------------------------------ |
+| React Hook Form     | 7.82.0  | Formularios React performantes          | [react-hook-form.com](https://react-hook-form.com)                                   |
+| Zod                 | 3.24.2  | Validacion de esquemas TypeScript-first | [zod.dev](https://zod.dev)                                                           |
+| @hookform/resolvers | 5.2.2   | Integracion Zod + React Hook Form       | [github.com/react-hook-form/resolvers](https://github.com/react-hook-form/resolvers) |
 
 ### Herramientas Generales
 
-| Libreria | Version | Funcion | Enlace |
-|---|---|---|---|
-| date-fns | 4.1.0 | Utilidades de fechas | [date-fns.org](https://date-fns.org) |
-| sonner | 2.0.7 | Notificaciones toast | [github.com/emilkowalski/sonner](https://github.com/emilkowalski/sonner) |
-| vaul | 1.1.2 | Drawer UI | [github.com/emilkowalski/vaul](https://github.com/emilkowalski/vaul) |
-| cmdk | 1.1.1 | Command palette | [cmdk.paco.me](https://cmdk.paco.me) |
-| embla-carousel-react | 8.6.0 | Carousel UI | [embla-carousel.com](https://www.embla-carousel.com) |
-| react-resizable-panels | 4.6.5 | Paneles redimensionables | [github.com/bvaughn/react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) |
-| input-otp | 1.4.2 | Input OTP | [github.com/unstable-factory/input-otp](https://github.com/unstable-factory/input-otp) |
+| Libreria               | Version | Funcion                  | Enlace                                                                                         |
+| ---------------------- | ------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| date-fns               | 4.1.0   | Utilidades de fechas     | [date-fns.org](https://date-fns.org)                                                           |
+| sonner                 | 2.0.7   | Notificaciones toast     | [github.com/emilkowalski/sonner](https://github.com/emilkowalski/sonner)                       |
+| vaul                   | 1.1.2   | Drawer UI                | [github.com/emilkowalski/vaul](https://github.com/emilkowalski/vaul)                           |
+| cmdk                   | 1.1.1   | Command palette          | [cmdk.paco.me](https://cmdk.paco.me)                                                           |
+| embla-carousel-react   | 8.6.0   | Carousel UI              | [embla-carousel.com](https://www.embla-carousel.com)                                           |
+| react-resizable-panels | 4.6.5   | Paneles redimensionables | [github.com/bvaughn/react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) |
+| input-otp              | 1.4.2   | Input OTP                | [github.com/unstable-factory/input-otp](https://github.com/unstable-factory/input-otp)         |
 
 ---
 
@@ -234,47 +234,47 @@ Chatbot:       Groq (Llama 3.1 8B) via Supabase Edge Function + RAG
 
 ### Compilacion y Build
 
-| Herramienta | Version | Funcion | Enlace |
-|---|---|---|---|
-| Vite | 8.0.16 | Build tool y dev server | [vite.dev](https://vite.dev) |
-| TypeScript | 5.8.3 | Lenguaje tipado | [typescriptlang.org](https://www.typescriptlang.org) |
-| Nitro | 3.0.260603-beta | Motor de servidor (UnJS) | [nitro.unjs.io](https://nitro.unjs.io) |
-| @lovable.dev/vite-tanstack-config | 2.7.1 | Configuracion Vite para Lovable/TanStack | [lovable.dev](https://lovable.dev) |
+| Herramienta                       | Version         | Funcion                                  | Enlace                                               |
+| --------------------------------- | --------------- | ---------------------------------------- | ---------------------------------------------------- |
+| Vite                              | 8.0.16          | Build tool y dev server                  | [vite.dev](https://vite.dev)                         |
+| TypeScript                        | 5.8.3           | Lenguaje tipado                          | [typescriptlang.org](https://www.typescriptlang.org) |
+| Nitro                             | 3.0.260603-beta | Motor de servidor (UnJS)                 | [nitro.unjs.io](https://nitro.unjs.io)               |
+| @lovable.dev/vite-tanstack-config | 2.7.1           | Configuracion Vite para Lovable/TanStack | [lovable.dev](https://lovable.dev)                   |
 
 ### Linting y Formateo
 
-| Herramienta | Version | Funcion | Enlace |
-|---|---|---|---|
-| ESLint | 9.32.0 | Linter de JavaScript/TypeScript | [eslint.org](https://eslint.org) |
-| Prettier | 3.7.3 | Formateador de codigo | [prettier.io](https://prettier.io) |
-| eslint-config-prettier | 10.1.1 | Desactiva reglas ESLint que conflictean con Prettier | [github.com/prettier/eslint-config-prettier](https://github.com/prettier/eslint-config-prettier) |
-| eslint-plugin-prettier | 5.2.6 | Ejecuta Prettier como regla ESLint | [github.com/prettier/eslint-plugin-prettier](https://github.com/prettier/eslint-plugin-prettier) |
+| Herramienta            | Version | Funcion                                              | Enlace                                                                                           |
+| ---------------------- | ------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| ESLint                 | 9.32.0  | Linter de JavaScript/TypeScript                      | [eslint.org](https://eslint.org)                                                                 |
+| Prettier               | 3.7.3   | Formateador de codigo                                | [prettier.io](https://prettier.io)                                                               |
+| eslint-config-prettier | 10.1.1  | Desactiva reglas ESLint que conflictean con Prettier | [github.com/prettier/eslint-config-prettier](https://github.com/prettier/eslint-config-prettier) |
+| eslint-plugin-prettier | 5.2.6   | Ejecuta Prettier como regla ESLint                   | [github.com/prettier/eslint-plugin-prettier](https://github.com/prettier/eslint-plugin-prettier) |
 
 ### Testing
 
-| Herramienta | Version | Funcion | Enlace |
-|---|---|---|---|
-| Vitest | 4.1.10 | Framework de testing unitario | [vitest.dev](https://vitest.dev) |
-| @vitest/coverage-v8 | 4.1.10 | Coverage de codigo via V8 | [vitest.dev](https://vitest.dev) |
-| Playwright | 1.61.1 | Testing E2E en navegadores reales | [playwright.dev](https://playwright.dev) |
-| @testing-library/react | 16.3.2 | Testing de componentes React | [testing-library.com](https://testing-library.com) |
-| @testing-library/jest-dom | 7.0.0 | Matchers DOM para tests | [testing-library.com](https://testing-library.com) |
-| jsdom | 29.1.1 | Implementacion DOM para tests | [github.com/jsdom/jsdom](https://github.com/jsdom/jsdom) |
+| Herramienta               | Version | Funcion                           | Enlace                                                   |
+| ------------------------- | ------- | --------------------------------- | -------------------------------------------------------- |
+| Vitest                    | 4.1.10  | Framework de testing unitario     | [vitest.dev](https://vitest.dev)                         |
+| @vitest/coverage-v8       | 4.1.10  | Coverage de codigo via V8         | [vitest.dev](https://vitest.dev)                         |
+| Playwright                | 1.61.1  | Testing E2E en navegadores reales | [playwright.dev](https://playwright.dev)                 |
+| @testing-library/react    | 16.3.2  | Testing de componentes React      | [testing-library.com](https://testing-library.com)       |
+| @testing-library/jest-dom | 7.0.0   | Matchers DOM para tests           | [testing-library.com](https://testing-library.com)       |
+| jsdom                     | 29.1.1  | Implementacion DOM para tests     | [github.com/jsdom/jsdom](https://github.com/jsdom/jsdom) |
 
 ### Git Hooks y CI Local
 
-| Herramienta | Version | Funcion | Enlace |
-|---|---|---|---|
-| Husky | 9.1.7 | Git hooks | [typicode.github.io/husky](https://typicode.github.io/husky) |
-| lint-staged | 17.1.1 | Ejecutar linting en archivos staged | [github.com/lint-staged/lint-staged](https://github.com/lint-staged/lint-staged) |
+| Herramienta | Version | Funcion                             | Enlace                                                                           |
+| ----------- | ------- | ----------------------------------- | -------------------------------------------------------------------------------- |
+| Husky       | 9.1.7   | Git hooks                           | [typicode.github.io/husky](https://typicode.github.io/husky)                     |
+| lint-staged | 17.1.1  | Ejecutar linting en archivos staged | [github.com/lint-staged/lint-staged](https://github.com/lint-staged/lint-staged) |
 
 ### Paquetes y Runtime
 
-| Herramienta | Funcion | Enlace |
-|---|---|---|
-| Bun | Runtime de JavaScript (usado en CI/CD) | [bun.sh](https://bun.sh) |
-| Node.js 22.12+ | Runtime de JavaScript (produccion) | [nodejs.org](https://nodejs.org) |
-| npm | Gestor de paquetes | [npmjs.com](https://www.npmjs.com) |
+| Herramienta    | Funcion                                | Enlace                             |
+| -------------- | -------------------------------------- | ---------------------------------- |
+| Bun            | Runtime de JavaScript (usado en CI/CD) | [bun.sh](https://bun.sh)           |
+| Node.js 22.12+ | Runtime de JavaScript (produccion)     | [nodejs.org](https://nodejs.org)   |
+| npm            | Gestor de paquetes                     | [npmjs.com](https://www.npmjs.com) |
 
 ---
 

@@ -27,7 +27,7 @@ export function CommoditySection({ activeCrop }: Props) {
       setLoading(false);
     }
 
-    if (!navigator.onLine) {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
       setLoading(false);
       return;
     }
@@ -37,7 +37,8 @@ export function CommoditySection({ activeCrop }: Props) {
       setPrices(data);
       setIsStale(false);
       saveOffline(CACHE_KEY, data);
-    } catch {
+    } catch (err) {
+      console.warn("[CommoditySection] fetch error, preserving cached state:", err);
       if (!cached || cached.length === 0) setPrices([]);
     } finally {
       setLoading(false);
@@ -61,16 +62,27 @@ export function CommoditySection({ activeCrop }: Props) {
     return (
       <Card className="rounded-2xl">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold">Mercado de referencia</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold">Mercado de Referencia</CardTitle>
+            <Badge variant="outline" className="text-[10px]">
+              Sin futuros internacionales
+            </Badge>
+          </div>
           <p className="text-[11px] text-muted-foreground">
-            Granadilla · sin cotización internacional equivalente
+            Granadilla (Passiflora ligularis) · Comercialización local/nacional
           </p>
         </CardHeader>
         <CardContent>
           <p className="text-xs leading-relaxed text-muted-foreground">{active.disclaimer}</p>
-          <p className="mt-2 text-[10px] text-muted-foreground">
-            Fuente sugerida para referencias locales: DANE SIPSA, mercado y fecha explícitos.
-          </p>
+          <div className="mt-3 rounded-xl border border-border p-2.5 bg-muted/20">
+            <p className="text-[11px] font-medium text-foreground">
+              Referencia de precios en Colombia:
+            </p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              Consulte el boletín de precios mayoristas del DANE (SIPSA) para Central de Abastos de
+              Bucaramanga (Centroabastos).
+            </p>
+          </div>
         </CardContent>
       </Card>
     );
@@ -80,26 +92,44 @@ export function CommoditySection({ activeCrop }: Props) {
     <Card className="rounded-2xl">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold">Precio Internacional</CardTitle>
-          {isStale && (
-            <Badge variant="secondary" className="text-[9px]">
-              Datos guardados
+          <CardTitle className="text-sm font-semibold">Precio de Futuros Internacionales</CardTitle>
+          <div className="flex items-center gap-1.5">
+            {(isStale || active.isCached) && (
+              <Badge variant="secondary" className="text-[9px]">
+                Dato en cache
+              </Badge>
+            )}
+            <Badge variant="outline" className="text-[9px] font-medium">
+              ICE Futures U.S.
             </Badge>
-          )}
+          </div>
         </div>
-        <p className="text-[11px] text-muted-foreground">{active.label} · Mercado de referencia</p>
+        <p className="text-[11px] text-muted-foreground">
+          {active.label} · Instrumento:{" "}
+          <span className="font-semibold text-foreground">{active.instrument}</span>
+        </p>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="rounded-xl border border-border p-3">
+        <div className="rounded-xl border border-border p-3 bg-muted/10">
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-[10px] text-muted-foreground">Precio actual</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+                Cotización de Referencia
+              </p>
               <p className="text-lg font-bold text-foreground">
                 {formatPrice(active)}
                 <span className="ml-1 text-[10px] font-normal text-muted-foreground">
                   {active.unit}
                 </span>
               </p>
+              {active.normalizedPricePerKg !== null && (
+                <p className="text-[10px] text-muted-foreground">
+                  Equivalente:{" "}
+                  <span className="font-semibold text-foreground">
+                    ${active.normalizedPricePerKg.toFixed(2)} USD/kg
+                  </span>
+                </p>
+              )}
             </div>
             <div className="text-right">
               <span
@@ -114,24 +144,26 @@ export function CommoditySection({ activeCrop }: Props) {
           </div>
         </div>
 
-        <div className="flex items-center justify-between rounded-xl border border-border px-3 py-2">
-          <span className="text-[10px] text-muted-foreground">Recomendación</span>
-          <span className={`text-[11px] font-bold ${recColor}`}>
-            {formatRecommendation(active.recommendation)}
-          </span>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col justify-between rounded-xl border border-border px-3 py-2">
+            <span className="text-[10px] text-muted-foreground">Recomendación mercado</span>
+            <span className={`text-[11px] font-bold ${recColor}`}>
+              {formatRecommendation(active.recommendation)}
+            </span>
+          </div>
+
+          <div className="flex flex-col justify-between rounded-xl border border-border px-3 py-2">
+            <span className="text-[10px] text-muted-foreground">Índice climático global</span>
+            <span className="text-[11px] font-bold text-foreground">
+              {active.climateScore.toFixed(0)}/100
+            </span>
+          </div>
         </div>
 
-        <div className="flex items-center justify-between rounded-xl border border-border px-3 py-2">
-          <span className="text-[10px] text-muted-foreground">Riesgo climático global</span>
-          <span className="text-[11px] font-bold text-foreground">
-            {active.climateScore.toFixed(0)}/100
-          </span>
-        </div>
-
-        {active.stressors.length > 0 && (
+        {active.stressors && active.stressors.length > 0 && (
           <div>
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Factores de estrés
+              Factores de estrés global
             </p>
             <div className="space-y-1.5">
               {active.stressors.slice(0, 3).map((s, i) => (
@@ -156,7 +188,7 @@ export function CommoditySection({ activeCrop }: Props) {
 
         <div>
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Otros cultivos
+            Otras cotizaciones de referencia
           </p>
           <div className="flex gap-1.5">
             {prices
@@ -164,7 +196,7 @@ export function CommoditySection({ activeCrop }: Props) {
               .map((p) => (
                 <div
                   key={p.crop}
-                  className="flex-1 rounded-xl border border-border p-2 text-center"
+                  className="flex-1 rounded-xl border border-border p-2 text-center bg-muted/5"
                 >
                   <p className="text-[9px] text-muted-foreground">{p.label}</p>
                   <p className="text-[10px] font-bold text-foreground">{formatPrice(p)}</p>
@@ -174,13 +206,22 @@ export function CommoditySection({ activeCrop }: Props) {
           </div>
         </div>
 
-        <p className="text-[9px] text-muted-foreground">
-          {active.instrument} · {active.market} · Fuente: {active.sources.join(", ")} ·{" "}
-          {new Date(active.forecastedAt).toLocaleDateString("es-CO")}
-        </p>
-        {active.disclaimer && (
-          <p className="text-[9px] leading-relaxed text-muted-foreground">{active.disclaimer}</p>
-        )}
+        <div className="rounded-lg bg-muted/30 p-2 text-[9px] leading-relaxed text-muted-foreground space-y-1">
+          <p>
+            <span className="font-semibold text-foreground">Mercado:</span> {active.market} ·{" "}
+            {active.instrument}
+          </p>
+          <p>
+            <span className="font-semibold text-foreground">Fuente:</span>{" "}
+            {active.sources.join(", ")} ·{" "}
+            {new Date(active.sourceTimestamp).toLocaleDateString("es-CO")}
+          </p>
+          {active.disclaimer && (
+            <p className="border-t border-border/50 pt-1 text-[8.5px] italic">
+              {active.disclaimer}
+            </p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
