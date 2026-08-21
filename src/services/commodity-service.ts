@@ -192,16 +192,23 @@ export class CommodityService {
         : "Cotización de futuros de café arábica lavado en bolsa (ICE Coffee C). No equivale al precio interno de compra de la FNC ni café pergamino en finca.",
       change: null,
       changePercent: null,
-      signal: forecast.signal,
-      recommendation: forecast.recommendation,
-      climateScore: forecast.climateScore,
-      confidence: forecast.confidence,
-      reasoning: forecast.reasoning,
-      stressors: forecast.stressors ?? [],
-      regions: forecast.regions ?? [],
-      sources: forecast.sources?.length ? forecast.sources : [forecast.currentPrice.source],
+      signal: forecast.signal || "NEUTRAL",
+      recommendation: forecast.recommendation || "HOLD",
+      climateScore: Number.isFinite(forecast.climateScore) ? forecast.climateScore : 50,
+      confidence: Number.isFinite(forecast.confidence) ? forecast.confidence : 0.8,
+      reasoning: forecast.reasoning || "Condiciones de mercado de referencia.",
+      stressors: Array.isArray(forecast.stressors)
+        ? forecast.stressors.filter((s) => s && typeof s.factor === "string")
+        : [],
+      regions: Array.isArray(forecast.regions)
+        ? forecast.regions.filter((r) => r && typeof r.name === "string")
+        : [],
+      sources:
+        Array.isArray(forecast.sources) && forecast.sources.length > 0
+          ? forecast.sources
+          : [forecast.currentPrice?.source || "ICE Futures U.S."],
       sourceTimestamp:
-        forecast.currentPrice.date || forecast.forecastedAt || new Date().toISOString(),
+        forecast.currentPrice?.date || forecast.forecastedAt || new Date().toISOString(),
       fetchedAt: new Date().toISOString(),
       isCached,
     };

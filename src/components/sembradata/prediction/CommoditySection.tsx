@@ -213,8 +213,7 @@ export function CommoditySection({ activeCrop }: Props) {
           </p>
           <p>
             <span className="font-semibold text-foreground">Fuente:</span>{" "}
-            {active.sources.join(", ")} ·{" "}
-            {new Date(active.sourceTimestamp).toLocaleDateString("es-CO")}
+            {active.sources.join(", ")} · {formatDateSafe(active.sourceTimestamp)}
           </p>
           {active.disclaimer && (
             <p className="border-t border-border/50 pt-1 text-[8.5px] italic">
@@ -292,4 +291,10 @@ function formatRecommendation(rec: string): string {
     default:
       return rec;
   }
+}
+
+function formatDateSafe(dateStr?: string): string {
+  if (!dateStr) return "Reciente";
+  const d = new Date(dateStr);
+  return Number.isNaN(d.getTime()) ? dateStr : d.toLocaleDateString("es-CO");
 }

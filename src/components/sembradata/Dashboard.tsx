@@ -733,7 +733,7 @@ export function Dashboard() {
                 </CardHeader>
                 <CardContent>
                   <SectionErrorBoundary sectionName="Gráfico de rendimiento">
-                    <YieldChart crop={crop} municipio={muni?.name ?? ""} />
+                    <YieldChart crop={crop} municipio={muni?.name ?? ""} filters={filters} />
                   </SectionErrorBoundary>
                 </CardContent>
               </Card>

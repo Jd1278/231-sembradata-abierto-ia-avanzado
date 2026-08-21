@@ -146,16 +146,31 @@ export async function getYieldSeriesByNames(
 }> {
   if (!isSupabaseConfigured()) return { historical: [], predictions: [] };
   try {
-    const [{ data: municipio, error: municipioError }, { data: cultivo, error: cultivoError }] =
-      await Promise.all([
-        supabase.from("municipios").select("id").eq("nombre", municipioNombre).maybeSingle(),
-        supabase.from("cultivos").select("id").eq("clave", cultivoClave).maybeSingle(),
-      ]);
-    if (municipioError || cultivoError || !municipio || !cultivo)
-      return { historical: [], predictions: [] };
+    const slug = municipioNombre
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+    const [{ data: muniById }, { data: muniByName }, { data: cultivo }] = await Promise.all([
+      supabase.from("municipios").select("id").eq("id", slug).maybeSingle(),
+      supabase
+        .from("municipios")
+        .select("id")
+        .ilike("nombre", municipioNombre.trim())
+        .maybeSingle(),
+      supabase.from("cultivos").select("id").eq("clave", cultivoClave).maybeSingle(),
+    ]);
+
+    const resolvedMuniId = muniById?.id ?? muniByName?.id;
+    const resolvedCultivoId = cultivo?.id ?? cultivoClave;
+
+    if (!resolvedMuniId) return { historical: [], predictions: [] };
+
     const [historical, predictions] = await Promise.all([
-      getRendimientoHistorico(municipio.id, cultivo.id),
-      getPredicciones(municipio.id, cultivo.id),
+      getRendimientoHistorico(resolvedMuniId, resolvedCultivoId),
+      getPredicciones(resolvedMuniId, resolvedCultivoId),
     ]);
     return { historical, predictions };
   } catch {
