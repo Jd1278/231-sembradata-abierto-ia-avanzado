@@ -57,6 +57,25 @@ export function CommoditySection({ activeCrop }: Props) {
   const signalColor = getSignalColor(active.signal);
   const recColor = getRecommendationColor(active.recommendation);
 
+  if (active.referenceType === "unavailable") {
+    return (
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold">Mercado de referencia</CardTitle>
+          <p className="text-[11px] text-muted-foreground">
+            Granadilla · sin cotización internacional equivalente
+          </p>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs leading-relaxed text-muted-foreground">{active.disclaimer}</p>
+          <p className="mt-2 text-[10px] text-muted-foreground">
+            Fuente sugerida para referencias locales: DANE SIPSA, mercado y fecha explícitos.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="rounded-2xl">
       <CardHeader className="pb-3">
@@ -76,9 +95,7 @@ export function CommoditySection({ activeCrop }: Props) {
             <div>
               <p className="text-[10px] text-muted-foreground">Precio actual</p>
               <p className="text-lg font-bold text-foreground">
-                {active.currency === "COP"
-                  ? `$${active.price.toLocaleString("es-CO")}`
-                  : `$${active.price.toFixed(2)}`}
+                {formatPrice(active)}
                 <span className="ml-1 text-[10px] font-normal text-muted-foreground">
                   {active.unit}
                 </span>
@@ -150,11 +167,7 @@ export function CommoditySection({ activeCrop }: Props) {
                   className="flex-1 rounded-xl border border-border p-2 text-center"
                 >
                   <p className="text-[9px] text-muted-foreground">{p.label}</p>
-                  <p className="text-[10px] font-bold text-foreground">
-                    {p.currency === "COP"
-                      ? `$${p.price.toLocaleString("es-CO")}`
-                      : `$${p.price.toFixed(2)}`}
-                  </p>
+                  <p className="text-[10px] font-bold text-foreground">{formatPrice(p)}</p>
                   <p className="text-[8px] text-muted-foreground">{p.unit}</p>
                 </div>
               ))}
@@ -162,12 +175,22 @@ export function CommoditySection({ activeCrop }: Props) {
         </div>
 
         <p className="text-[9px] text-muted-foreground">
-          Fuente: FRED vía Commodity Forecast API ·{" "}
+          {active.instrument} · {active.market} · Fuente: {active.sources.join(", ")} ·{" "}
           {new Date(active.forecastedAt).toLocaleDateString("es-CO")}
         </p>
+        {active.disclaimer && (
+          <p className="text-[9px] leading-relaxed text-muted-foreground">{active.disclaimer}</p>
+        )}
       </CardContent>
     </Card>
   );
+}
+
+function formatPrice(price: CommodityPrice): string {
+  if (price.price == null) return "No disponible";
+  return price.currency === "COP"
+    ? `$${price.price.toLocaleString("es-CO")}`
+    : `$${price.price.toFixed(2)}`;
 }
 
 function getSignalColor(signal: string): string {

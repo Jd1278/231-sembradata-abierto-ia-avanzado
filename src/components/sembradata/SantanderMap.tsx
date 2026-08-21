@@ -5,6 +5,7 @@ import type { CropKey, Risk } from "@/types/crops";
 import { getFeaturesForDepartment, VIEW_H, VIEW_W, type FeatureResult } from "./municipios";
 import { cn } from "@/lib/utils";
 import { SANTANDER } from "@/data/departamentos";
+import type { MunicipalityClimateState } from "@/services/climate-state";
 
 const RISK_FILL: Record<Risk, string> = {
   Bajo: "fill-risk-low",
@@ -26,7 +27,9 @@ interface Props {
   crop: CropKey;
   selected: string;
   onSelect: (name: string) => void;
-  dynamicRisk?: { level: Risk; score: number };
+  climateStates?: Record<string, MunicipalityClimateState>;
+  climateReady?: boolean;
+  loadingClimateStates?: boolean;
   filteredNames?: Set<string>;
 }
 
@@ -34,7 +37,9 @@ export const SantanderMap = memo(function SantanderMap({
   crop,
   selected,
   onSelect,
-  dynamicRisk,
+  climateStates,
+  climateReady = false,
+  loadingClimateStates = false,
   filteredNames,
 }: Props) {
   const [hover, setHover] = useState<string | null>(null);
@@ -150,7 +155,8 @@ export const SantanderMap = memo(function SantanderMap({
 
             {features.map((m, idx) => {
               const isSelected = m.name === selected;
-              const risk = isSelected && dynamicRisk ? dynamicRisk.level : m.risk[crop];
+              const state = climateStates?.[m.name];
+              const risk = state?.level ?? m.risk[crop];
               const isHover = m.id === hover;
               const isFocused = idx === focusedIdx;
               const isFiltered = !filteredNames || filteredNames.has(m.name);
@@ -162,7 +168,7 @@ export const SantanderMap = memo(function SantanderMap({
                   tabIndex={-1}
                   aria-label={`${m.name}, riesgo ${risk}`}
                   className={cn(
-                    RISK_FILL[risk],
+                    climateReady ? RISK_FILL[risk] : "fill-muted",
                     "cursor-pointer stroke-background transition-all duration-200 ease-out",
                     "hover:[filter:brightness(1.1)]",
                     isHover || isFocused ? "opacity-100" : isFiltered ? "opacity-85" : "opacity-20",
@@ -330,9 +336,7 @@ export const SantanderMap = memo(function SantanderMap({
                   className={cn(
                     "flex items-center gap-1.5 text-sm font-semibold",
                     RISK_TEXT[
-                      activeFeature.name === selected && dynamicRisk
-                        ? dynamicRisk.level
-                        : activeFeature.risk[crop]
+                      climateStates?.[activeFeature.name]?.level ?? activeFeature.risk[crop]
                     ],
                   )}
                 >
@@ -340,23 +344,27 @@ export const SantanderMap = memo(function SantanderMap({
                     className={cn(
                       "h-2 w-2 rounded-full",
                       RISK_DOT[
-                        activeFeature.name === selected && dynamicRisk
-                          ? dynamicRisk.level
-                          : activeFeature.risk[crop]
+                        climateStates?.[activeFeature.name]?.level ?? activeFeature.risk[crop]
                       ],
                     )}
                   />
-                  {activeFeature.name === selected && dynamicRisk
-                    ? dynamicRisk.level
-                    : activeFeature.risk[crop]}
-                  {dynamicRisk && activeFeature.name === selected && (
+                  {climateStates?.[activeFeature.name]?.level ?? activeFeature.risk[crop]}
+                  {climateStates?.[activeFeature.name] && (
                     <span className="text-[10px] text-muted-foreground font-normal ml-1">
-                      ({dynamicRisk.score} pts)
+                      ({climateStates[activeFeature.name].score} pts)
                     </span>
                   )}
                 </p>
               </div>
             </div>
+          </div>
+        )}
+
+        {loadingClimateStates && (
+          <div className="absolute inset-0 z-10 grid place-items-center bg-muted/80 backdrop-blur-sm">
+            <p className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+              Procesando estado climático definitivo…
+            </p>
           </div>
         )}
       </div>

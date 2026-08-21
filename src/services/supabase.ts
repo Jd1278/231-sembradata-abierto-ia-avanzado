@@ -136,3 +136,29 @@ export async function getPredicciones(
     return [];
   }
 }
+
+export async function getYieldSeriesByNames(
+  municipioNombre: string,
+  cultivoClave: string,
+): Promise<{
+  historical: RendimientoHistorico[];
+  predictions: Prediccion[];
+}> {
+  if (!isSupabaseConfigured()) return { historical: [], predictions: [] };
+  try {
+    const [{ data: municipio, error: municipioError }, { data: cultivo, error: cultivoError }] =
+      await Promise.all([
+        supabase.from("municipios").select("id").eq("nombre", municipioNombre).maybeSingle(),
+        supabase.from("cultivos").select("id").eq("clave", cultivoClave).maybeSingle(),
+      ]);
+    if (municipioError || cultivoError || !municipio || !cultivo)
+      return { historical: [], predictions: [] };
+    const [historical, predictions] = await Promise.all([
+      getRendimientoHistorico(municipio.id, cultivo.id),
+      getPredicciones(municipio.id, cultivo.id),
+    ]);
+    return { historical, predictions };
+  } catch {
+    return { historical: [], predictions: [] };
+  }
+}

@@ -1,4 +1,5 @@
 import type { CropKey } from "@/types/crops";
+import { recommendAlternativeCrops } from "@/services/crop-recommendations";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -34,6 +35,13 @@ export interface AlternativeCrop {
   reason: string;
   estimatedYield: string;
   bestSeason: string;
+  score?: number;
+  compatibility?: {
+    temperature: number;
+    precipitation: number;
+    humidity: number;
+    altitude: number;
+  };
 }
 
 export interface ViabilityResult {
@@ -662,7 +670,12 @@ export function evaluateViability(
   const recommendations = generateRecommendations(crop, factors, pestRisk, seasonal);
 
   // ---- Alternatives ----
-  const alternatives = generateAlternatives(crop);
+  const alternatives = generateAlternatives(crop, {
+    temperature,
+    precipitation,
+    humidity,
+    altitude,
+  });
 
   return {
     score: finalScore,
@@ -760,69 +773,19 @@ function generateRecommendations(
 /*  Alternative crops (unchanged)                                      */
 /* ------------------------------------------------------------------ */
 
-const ALTERNATIVES: Record<CropKey, AlternativeCrop[]> = {
-  cacao: [
+function generateAlternatives(
+  crop: CropKey,
+  context: { temperature: number; precipitation: number; humidity: number; altitude: number },
+): AlternativeCrop[] {
+  // Kept local to avoid a circular type dependency; the recommendation service owns the catalogue.
+  // The legacy static list is intentionally no longer used for live analyses.
+  return recommendAlternativeCrops(
     {
-      name: "Café",
-      reason: "Tolera mejor altitudes intermedias",
-      estimatedYield: "1.2-1.8 Ton/Ha",
-      bestSeason: "Marzo-Abril",
+      temperature: context.temperature,
+      precipitationDaily: context.precipitation,
+      humidity: context.humidity,
+      altitude: context.altitude,
     },
-    {
-      name: "Plátano",
-      reason: "Cultivo de rápido retorno, tolera diversas condiciones",
-      estimatedYield: "15-25 Ton/Ha",
-      bestSeason: "Todo el año",
-    },
-    {
-      name: "Yuca",
-      reason: "Resistente a sequía, bajo mantenimiento",
-      estimatedYield: "10-15 Ton/Ha",
-      bestSeason: "Todo el año",
-    },
-  ],
-  cafe: [
-    {
-      name: "Cacao",
-      reason: "Tolera zonas más bajas y cálidas",
-      estimatedYield: "0.85-1.2 Ton/Ha",
-      bestSeason: "Abril-Mayo",
-    },
-    {
-      name: "Aguacate",
-      reason: "Alto valor comercial, requerimientos similares",
-      estimatedYield: "12-18 Ton/Ha",
-      bestSeason: "Marzo-Junio",
-    },
-    {
-      name: "Guayaba",
-      reason: "Frutal tropical de baja altitud",
-      estimatedYield: "15-20 Ton/Ha",
-      bestSeason: "Todo el año",
-    },
-  ],
-  granadilla: [
-    {
-      name: "Maracuyá",
-      reason: "Misma familia, mayor resistencia a plagas",
-      estimatedYield: "15-20 Ton/Ha",
-      bestSeason: "Marzo-Junio",
-    },
-    {
-      name: "Lulo",
-      reason: "Frutal andino, buena adaptación",
-      estimatedYield: "10-15 Ton/Ha",
-      bestSeason: "Abril-Junio",
-    },
-    {
-      name: "Tomate de árbol",
-      reason: "Cultivo emergente, alto valor nutricional",
-      estimatedYield: "8-12 Ton/Ha",
-      bestSeason: "Todo el año",
-    },
-  ],
-};
-
-function generateAlternatives(crop: CropKey): AlternativeCrop[] {
-  return ALTERNATIVES[crop] ?? [];
+    CROP_PROFILES[crop].label,
+  );
 }

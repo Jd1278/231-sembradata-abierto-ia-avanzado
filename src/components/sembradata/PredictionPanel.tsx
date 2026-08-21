@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CROP_DATA } from "@/components/sembradata/data";
 import type { CropKey } from "@/types/crops";
 import { fetchCurrentClimate, type ClimateData } from "@/services/climate-api";
+import type { MunicipalityClimateState } from "@/services/climate-state";
 import { fetchSoilData, type SoilData } from "@/services/soil-service";
 import { evaluateViability, type ViabilityResult } from "@/types/prediction-v2";
 import { MONTH_LABELS } from "@/services/temporal-optimizer";
@@ -50,6 +51,8 @@ interface Props {
   altitude?: number;
   departamento?: string;
   month?: string;
+  sharedClimate?: ClimateData | null;
+  climateState?: MunicipalityClimateState | null;
   onClose: () => void;
 }
 
@@ -61,6 +64,8 @@ export function PredictionPanel({
   altitude = 500,
   departamento,
   month,
+  sharedClimate = null,
+  climateState = null,
   onClose,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -129,7 +134,7 @@ export function PredictionPanel({
         const pastDays = getOptimalPastDays(crop);
         const [soilResult, climateResult] = await Promise.allSettled([
           fetchSoilData(lat, lng),
-          fetchCurrentClimate(lat, lng, pastDays),
+          sharedClimate ? Promise.resolve(sharedClimate) : fetchCurrentClimate(lat, lng, pastDays),
         ]);
 
         if (cancelled) return;
@@ -177,7 +182,7 @@ export function PredictionPanel({
     return () => {
       cancelled = true;
     };
-  }, [lat, lng, crop, altitude, municipio, departamento, month]);
+  }, [lat, lng, crop, altitude, municipio, departamento, month, sharedClimate]);
 
   return (
     <div
@@ -233,6 +238,12 @@ export function PredictionPanel({
                     seasonalNote={viability.seasonalNote}
                     confidence={viability.confidence}
                   />
+                  {climateState && (
+                    <p className="mt-2 text-[10px] text-muted-foreground">
+                      Estado climático del mapa: {climateState.level} ({climateState.score}/100),
+                      calculado con la misma serie climática.
+                    </p>
+                  )}
                 </SectionErrorBoundary>
               )}
               {climate && (

@@ -50,6 +50,10 @@ import {
   fetchHistoricalClimate,
   type ClimateData,
 } from "@/services/climate-api";
+import {
+  buildMunicipalityClimateStates,
+  type MunicipalityClimateState,
+} from "@/services/climate-state";
 import { fetchSoilData, type SoilData } from "@/services/soil-service";
 import { evaluateViability, type ViabilityResult } from "@/types/prediction-v2";
 import { MONTH_LABELS } from "@/services/temporal-optimizer";
@@ -105,6 +109,8 @@ export function Dashboard() {
     error: null,
   });
   const [aiRecommendation, setAiRecommendation] = useState<string | null>(null);
+  const [mapStates, setMapStates] = useState<Record<string, MunicipalityClimateState> | null>(null);
+  const [mapStateError, setMapStateError] = useState<string | null>(null);
 
   const filteredMunicipios = useMemo(() => {
     return santanderMunis.filter((m) => {
@@ -140,6 +146,33 @@ export function Dashboard() {
 
   const lat = muni ? (muni.geolat ?? SANTANDER.lat) : SANTANDER.lat;
   const lng = muni ? (muni.geolng ?? SANTANDER.lng) : SANTANDER.lng;
+
+  // A snapshot is committed only after every municipality has a final category.
+  // This prevents API completion order from recolouring individual municipalities.
+  useEffect(() => {
+    let active = true;
+    setMapStates(null);
+    setMapStateError(null);
+    buildMunicipalityClimateStates(
+      santanderMunis.map((m) => ({
+        name: m.name,
+        geolat: m.geolat,
+        geolng: m.geolng,
+        altitude: computeAltitude(m.factor),
+      })),
+      crop,
+    )
+      .then((states) => {
+        if (active) setMapStates(states);
+      })
+      .catch((error) => {
+        console.warn("Map climate snapshot error:", error);
+        if (active) setMapStateError("No se pudo construir el estado climático del mapa.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [crop]);
 
   const fetchGen = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -336,11 +369,7 @@ export function Dashboard() {
     };
   }, [realtime, cropInfo, muni, crop]);
 
-  const dynamicRisk = useMemo(
-    () =>
-      realtime.viability ? { level: metrics.risk, score: realtime.viability.score } : undefined,
-    [realtime.viability, metrics.risk],
-  );
+  const selectedClimateState = muni ? mapStates?.[muni.name] : undefined;
 
   return (
     <div className="min-h-screen bg-background">
@@ -682,7 +711,9 @@ export function Dashboard() {
                     crop={crop}
                     selected={muni?.name ?? ""}
                     onSelect={setMunicipio}
-                    dynamicRisk={dynamicRisk}
+                    climateStates={mapStates ?? undefined}
+                    climateReady={!!mapStates}
+                    loadingClimateStates={!mapStates && !mapStateError}
                     filteredNames={filteredNames}
                   />
                 </CardContent>
@@ -702,11 +733,7 @@ export function Dashboard() {
                 </CardHeader>
                 <CardContent>
                   <SectionErrorBoundary sectionName="Gráfico de rendimiento">
-                    <YieldChart
-                      crop={crop}
-                      factor={muni?.factor ?? 1}
-                      viabilityScore={realtime.viability?.score ?? 50}
-                    />
+                    <YieldChart crop={crop} municipio={muni?.name ?? ""} />
                   </SectionErrorBoundary>
                 </CardContent>
               </Card>
@@ -776,6 +803,8 @@ export function Dashboard() {
               altitude={computeAltitude(muni?.factor)}
               departamento={SANTANDER.nombre}
               month={month}
+              sharedClimate={selectedClimateState?.climate ?? null}
+              climateState={selectedClimateState ?? null}
               onClose={() => setShowPrediction(false)}
             />
           </Suspense>
