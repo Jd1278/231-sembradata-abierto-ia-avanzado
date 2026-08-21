@@ -6,13 +6,7 @@ import { getFeaturesForDepartment, VIEW_H, VIEW_W, type FeatureResult } from "./
 import { cn } from "@/lib/utils";
 import { SANTANDER } from "@/data/departamentos";
 import type { MunicipalityClimateState } from "@/services/climate-state";
-
-const RISK_FILL: Record<RiskLevel, string> = {
-  Bajo: "fill-risk-low",
-  Medio: "fill-risk-med",
-  Alto: "fill-risk-high",
-  NoData: "fill-muted/70",
-};
+import { getMunicipalityMapStyle } from "@/services/map-compatibility";
 
 const RISK_TEXT: Record<RiskLevel, string> = {
   Bajo: "text-risk-low",
@@ -36,6 +30,7 @@ interface Props {
   climateReady?: boolean;
   loadingClimateStates?: boolean;
   filteredNames?: Set<string>;
+  hasActiveFilters?: boolean;
 }
 
 export const SantanderMap = memo(function SantanderMap({
@@ -46,6 +41,7 @@ export const SantanderMap = memo(function SantanderMap({
   climateReady = false,
   loadingClimateStates = false,
   filteredNames,
+  hasActiveFilters = false,
 }: Props) {
   const [hover, setHover] = useState<string | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
@@ -164,24 +160,33 @@ export const SantanderMap = memo(function SantanderMap({
               const risk: RiskLevel = state?.level ?? (climateReady ? "NoData" : "NoData");
               const isHover = m.id === hover;
               const isFocused = idx === focusedIdx;
-              const isFiltered = !filteredNames || filteredNames.has(m.name);
+              const isCompatible = !filteredNames || filteredNames.has(m.name);
+              const mapStyle = getMunicipalityMapStyle({
+                risk,
+                compatible: isCompatible,
+                hasActiveFilters,
+                selected: isSelected,
+                hovered: isHover,
+                focused: isFocused,
+              });
+
               return (
                 <path
                   key={m.id}
                   d={m.path}
                   role="button"
                   tabIndex={-1}
-                  aria-label={`${m.name}, riesgo ${risk}`}
+                  aria-label={`${m.name}, riesgo ${risk}${hasActiveFilters && !isCompatible ? " (Incompatible con filtros)" : ""}`}
                   className={cn(
-                    RISK_FILL[risk] ?? "fill-muted/70",
+                    mapStyle.fillClass,
+                    mapStyle.opacityClass,
                     "cursor-pointer stroke-background transition-all duration-200 ease-out",
                     "hover:[filter:brightness(1.15)]",
-                    isHover || isFocused ? "opacity-100" : isFiltered ? "opacity-90" : "opacity-25",
                   )}
-                  strokeWidth={isSelected ? 1.4 : isFocused ? 1.2 : 0.6}
-                  stroke={isSelected || isFocused ? "currentColor" : undefined}
+                  strokeWidth={mapStyle.strokeWidth}
+                  stroke={mapStyle.strokeColor}
                   style={{
-                    color: isSelected || isFocused ? "hsl(var(--foreground))" : undefined,
+                    color: mapStyle.strokeColor ? "hsl(var(--foreground))" : undefined,
                   }}
                   onMouseEnter={() => setHover(m.id)}
                   onClick={() => onSelect(m.name)}
@@ -218,6 +223,18 @@ export const SantanderMap = memo(function SantanderMap({
               />
             </g>
           </svg>
+        )}
+
+        {hasActiveFilters && filteredNames && filteredNames.size === 0 && (
+          <div className="absolute inset-x-4 top-4 z-10 rounded-xl border border-border bg-background/95 p-3 text-center shadow-md backdrop-blur">
+            <p className="text-xs font-semibold text-foreground">
+              No existen municipios compatibles con los filtros seleccionados.
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Ajuste los rangos de altitud, temperatura o precipitación para visualizar zonas
+              viables.
+            </p>
+          </div>
         )}
 
         {/* Zoom controls */}
@@ -368,29 +385,28 @@ export const SantanderMap = memo(function SantanderMap({
 
               <div className="col-span-2">
                 <p className="text-[10px] text-muted-foreground">Riesgo agroclimático</p>
-                <p
-                  className={cn(
-                    "flex items-center gap-1.5 text-sm font-semibold",
-                    RISK_TEXT[climateStates?.[activeFeature.name]?.level ?? "NoData"],
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "h-2 w-2 rounded-full",
-                      RISK_DOT[climateStates?.[activeFeature.name]?.level ?? "NoData"],
-                    )}
-                  />
-                  {climateStates?.[activeFeature.name]?.level === "NoData"
-                    ? "Sin Datos"
-                    : (climateStates?.[activeFeature.name]?.level ?? "Sin Datos")}
-                  {climateStates?.[activeFeature.name]?.riskScore !== null &&
-                    climateStates?.[activeFeature.name]?.riskScore !== undefined && (
-                      <span className="text-[10px] text-muted-foreground font-normal ml-1">
-                        (Riesgo: {(climateStates[activeFeature.name].riskScore! * 100).toFixed(0)}%
-                        · Aptitud: {climateStates[activeFeature.name].score} pts)
-                      </span>
-                    )}
-                </p>
+                {(() => {
+                  const activeLevel: RiskLevel =
+                    climateStates?.[activeFeature.name]?.level ?? "NoData";
+                  const activeState = climateStates?.[activeFeature.name];
+                  return (
+                    <p
+                      className={cn(
+                        "flex items-center gap-1.5 text-sm font-semibold",
+                        RISK_TEXT[activeLevel],
+                      )}
+                    >
+                      <span className={cn("h-2 w-2 rounded-full", RISK_DOT[activeLevel])} />
+                      {activeLevel === "NoData" ? "Sin Datos" : activeLevel}
+                      {activeState?.riskScore !== null && activeState?.riskScore !== undefined && (
+                        <span className="text-[10px] text-muted-foreground font-normal ml-1">
+                          (Riesgo: {(activeState.riskScore * 100).toFixed(0)}% · Aptitud:{" "}
+                          {activeState.score} pts)
+                        </span>
+                      )}
+                    </p>
+                  );
+                })()}
               </div>
             </div>
           </div>

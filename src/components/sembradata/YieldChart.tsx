@@ -7,17 +7,25 @@ import {
   type HistoricalPredictionPoint,
 } from "@/services/historical-prediction-service";
 
+import type { MunicipalityClimateState } from "@/services/climate-state";
+
 interface Props {
   crop: CropKey;
   municipio: string;
   filters?: Partial<ChartFilters>;
+  climateState?: MunicipalityClimateState | null;
 }
 
 const W = 500;
 const H = 300;
 const PAD = { top: 22, right: 24, bottom: 40, left: 50 };
 
-export const YieldChart = memo(function YieldChart({ crop, municipio, filters }: Props) {
+export const YieldChart = memo(function YieldChart({
+  crop,
+  municipio,
+  filters,
+  climateState,
+}: Props) {
   const chartFilters: ChartFilters = useMemo(
     () => ({
       crop,
@@ -34,8 +42,8 @@ export const YieldChart = memo(function YieldChart({ crop, municipio, filters }:
     error,
     refetch,
   } = useQuery<HistoricalPredictionPoint[]>({
-    queryKey: ["historical-prediction-series", crop, municipio, filters],
-    queryFn: () => fetchHistoricalAndPredictionSeries(chartFilters),
+    queryKey: ["historical-prediction-series", crop, municipio, filters, climateState?.computedAt],
+    queryFn: () => fetchHistoricalAndPredictionSeries(chartFilters, climateState),
     staleTime: 1000 * 60 * 15, // 15 minutes
     gcTime: 1000 * 60 * 60, // 1 hour
     enabled: Boolean(municipio && crop),

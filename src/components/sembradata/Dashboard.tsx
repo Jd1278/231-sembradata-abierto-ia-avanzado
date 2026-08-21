@@ -23,16 +23,11 @@ import { cn } from "@/lib/utils";
 import { SantanderMap } from "./SantanderMap";
 import { YieldChart } from "./YieldChart";
 import { RiskChart } from "./RiskChart";
-import {
-  MUNICIPIOS,
-  CROP_DATA,
-  computeAltitude,
-  estimateTemperature,
-  estimatePrecipitation,
-} from "./data";
+import { MUNICIPIOS, CROP_DATA, computeAltitude } from "./data";
 import type { CropKey, SoilType } from "@/types/crops";
 import { OfflineIndicator } from "./OfflineIndicator";
 import { AdvancedFilters, type AdvancedFilterValues } from "./AdvancedFilters";
+import { isMunicipalityCompatible, hasActiveAdvancedFilters } from "@/services/map-compatibility";
 import { FilterBlock } from "./dashboard/FilterBlock";
 import { KpiCard } from "./dashboard/KpiCard";
 import { RiskKpiCard } from "./dashboard/RiskKpiCard";
@@ -112,26 +107,13 @@ export function Dashboard() {
   const [mapStates, setMapStates] = useState<Record<string, MunicipalityClimateState> | null>(null);
   const [mapStateError, setMapStateError] = useState<string | null>(null);
 
+  const hasActiveFilters = useMemo(() => hasActiveAdvancedFilters(filters), [filters]);
+
   const filteredMunicipios = useMemo(() => {
     return santanderMunis.filter((m) => {
-      const alt = computeAltitude(m.factor);
-      if (alt < filters.altitudeRange[0] || alt > filters.altitudeRange[1]) return false;
-
-      const estTemp = estimateTemperature(alt);
-      if (estTemp < filters.tempRange[0] || estTemp > filters.tempRange[1]) return false;
-
-      const estPrecip = estimatePrecipitation(alt);
-      if (estPrecip < filters.precipRange[0] || estPrecip > filters.precipRange[1]) return false;
-
-      if (filters.soilType !== "all") {
-        const soilByAlt =
-          alt < 800 ? "arcilla" : alt < 1500 ? "franco" : alt < 2200 ? "limo" : "arena";
-        if (soilByAlt !== filters.soilType) return false;
-      }
-
-      return true;
+      return isMunicipalityCompatible(m, filters, mapStates?.[m.name]);
     });
-  }, [filters]);
+  }, [filters, mapStates]);
 
   const filteredNames = useMemo(
     () => new Set(filteredMunicipios.map((m) => m.name)),
@@ -715,6 +697,7 @@ export function Dashboard() {
                     climateReady={!!mapStates}
                     loadingClimateStates={!mapStates && !mapStateError}
                     filteredNames={filteredNames}
+                    hasActiveFilters={hasActiveFilters}
                   />
                 </CardContent>
               </Card>
@@ -733,7 +716,12 @@ export function Dashboard() {
                 </CardHeader>
                 <CardContent>
                   <SectionErrorBoundary sectionName="Gráfico de rendimiento">
-                    <YieldChart crop={crop} municipio={muni?.name ?? ""} filters={filters} />
+                    <YieldChart
+                      crop={crop}
+                      municipio={muni?.name ?? ""}
+                      filters={filters}
+                      climateState={mapStates?.[muni?.name ?? ""]}
+                    />
                   </SectionErrorBoundary>
                 </CardContent>
               </Card>
