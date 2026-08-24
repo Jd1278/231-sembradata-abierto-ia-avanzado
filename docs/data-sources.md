@@ -1,22 +1,29 @@
-| Característica                        | Fuente de Datos                                          | Link                                                                                                                                             |
-| :------------------------------------ | :------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Mapa Departamental Interactivo**    | DANE (DIVIPOLA) + GeoJSON propio                         | [DANE DIVIPOLA](https://www.dane.gov.co/index.php/estadisticas-por-tema/estadisticas-territoriales/division-politico-administrativa-de-colombia) |
-| **Panel de Predicción Detallado**     | Agregación: Open-Meteo + SoilGrids + NASA POWER          | [Open-Meteo](https://open-meteo.com/) · [SoilGrids](https://www.isric.org/explore/soilgrids) · [NASA POWER](https://power.larc.nasa.gov/)        |
-| **Datos Climáticos en Tiempo Real**   | Open-Meteo API                                           | [open-meteo.com](https://open-meteo.com/)                                                                                                        |
-| **Validación Histórica (NASA POWER)** | NASA POWER (agroclimatology)                             | [power.larc.nasa.gov](https://power.larc.nasa.gov/)                                                                                              |
-| **Estaciones IDEAM**                  | IDEAM vía datos.gov.co (Socrata)                         | [datos.gov.co - IDEAM](https://www.datos.gov.co/Ambiente-y-Desarrollo-Sostenible)                                                                |
-| **Análisis de Suelo**                 | SoilGrids (ISRIC)                                        | [isric.org/soilgrids](https://www.isric.org/explore/soilgrids)                                                                                   |
-| **Chatbot**                           | Groq Llama 3.1 8B                                        | [groq.com](https://groq.com/)                                                                                                                    |
-| **Evaluación de Viabilidad**          | Motor interno (agrega Open-Meteo, SoilGrids, NASA POWER) | —                                                                                                                                                |
-| **Precios Internacionales**           | Commodity Forecast API                                   | [commodityforecasts.co.uk](https://www.commodityforecasts.co.uk/)                                                                                |
-| **Panel de KPIs**                     | Agregación interna de múltiples APIs                     | —                                                                                                                                                |
-| **Índices Agroclimáticos**            | NASA POWER (GDD, aridez, estrés UV)                      | [power.larc.nasa.gov](https://power.larc.nasa.gov/)                                                                                              |
-| **Cache de APIs**                     | Supabase (PostgreSQL)                                    | [supabase.com](https://supabase.com/)                                                                                                            |
-| **Alertas Tempranas**                 | Motor de riesgo interno (agrega Open-Meteo + NASA POWER) | [prediction-engine](https://github.com/)                                                                                                         |
-| **Pronósticos Estacionales**          | Open-Meteo (históricos 90d + pronóstico 7d) + NASA POWER | [open-meteo.com](https://open-meteo.com/) · [power.larc.nasa.gov](https://power.larc.nasa.gov/)                                                  |
-| **Calidad del Suelo**                 | SoilGrids (ISRIC)                                        | [isric.org/soilgrids](https://www.isric.org/explore/soilgrids)                                                                                   |
-| **Exportación Excel**                 | SheetJS (xlsx) — librería cliente                        | [sheetjs.com](https://sheetjs.com/)                                                                                                              |
-| **Notificaciones Push**               | Web Push API nativa del navegador                        | [MDN Web Push](https://developer.mozilla.org/en-US/docs/Web/API/Push_API)                                                                        |
-| **Compartir por URL**                 | Web Share API nativa                                     | [MDN Web Share](https://developer.mozilla.org/en-US/docs/Web/API/Web_Share_API)                                                                  |
-| **Multi-idioma**                      | Sistema interno de traducción                            | —                                                                                                                                                |
-| **Historial de Análisis**             | Supabase + IndexedDB (fallback offline)                  | [supabase.com](https://supabase.com/)                                                                                                            |
+# Data Sources Reference — SembraData
+
+Inventory and technical classification of primary data providers, institutional sources, and AI evaluation services.
+
+---
+
+## 1. Ground Truth Historical Observations
+
+- **Source:** Ministry of Agriculture and Rural Development (MinAgricultura) / Municipal Agricultural Evaluations (EVA).
+- **Scope:** 87 municipalities of Santander, Colombia.
+- **Crops:** Cocoa (`cacao`), Coffee (`cafe`), Sweet Granadilla (`granadilla`).
+- **Policy:** Strictly verified historical records. When sample size $N < 3$, statistical projections are halted with `status: "insufficient_data"` to avoid synthetic hallucinations.
+
+---
+
+## 2. Live Weather and Pedology
+
+- **Open-Meteo API:** Real-time temperature, humidity, wind, and 7-day cumulative precipitation forecasts.
+- **SoilGrids ISRIC:** Global pedological database providing pH, organic matter, and soil texture at 6 depth strata.
+- **NASA POWER:** Solar irradiance, evapotranspiration ($ET_0$), and agroclimatic indices.
+- **IDEAM Socrata Open Data:** Official Colombian meteorological station observations.
+
+---
+
+## 3. Statistical Forecasting & Artificial Intelligence
+
+- **Statistical Forecasting (Theil-Sen Robust Linear Estimator):** Reproducible mathematical trend fitting with 80% and 95% confidence intervals ($L_{80}, U_{80}, L_{95}, U_{95}$).
+- **Groq Cloud (`openai/gpt-oss-20b`):** Edge Function-based conversational assistant strictly bounded by server-side deterministic context.
+- **Google Gemini 2.0 Flash:** Server-side qualitative agronomic evaluation without quantitative numerical modifications.

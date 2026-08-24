@@ -1,5 +1,8 @@
 # SembraData — Plan de Estabilización, Mejora y Escalabilidad
 
+> **Estado:** COMPLETADO Y CONSOLIDADO (Agosto 2026).
+> **Nota de Arquitectura:** El modo offline / PWA fue oficialmente deprecado y eliminado en favor de una arquitectura conectada determinista con validación en tiempo real.
+
 **Estrategia seleccionada:** Opción C — Refactorización controlada + corrección incremental  
 **Duración máxima:** 14 días  
 **Agente de desarrollo:** OpenCode  
@@ -377,7 +380,7 @@ Modelo:
                          USUARIO
                             │
                             ▼
-                    WEB / PWA
+                  WEB (Online Conectado)
              React + TanStack Start
                             │
                             ▼

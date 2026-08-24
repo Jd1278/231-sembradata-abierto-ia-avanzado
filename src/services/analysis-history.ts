@@ -17,6 +17,15 @@ export interface AnalysisRecord {
   created_at: string;
 }
 
+export interface AnalysisOperationResult {
+  ok: boolean;
+  error?: string;
+}
+
+/**
+ * Persists an agronomic analysis record to Supabase.
+ * Strictly requires active database connection (no offline localStorage fallback).
+ */
 export async function saveAnalysis(
   municipio: string,
   departamento: string,
@@ -24,10 +33,9 @@ export async function saveAnalysis(
   lat: number,
   lng: number,
   viability: ViabilityResult,
-): Promise<boolean> {
+): Promise<AnalysisOperationResult> {
   if (!isSupabaseConfigured()) {
-    saveAnalysisLocal(municipio, departamento, cultivo, lat, lng, viability);
-    return true;
+    return { ok: false, error: "Servicio de persistencia no configurado" };
   }
 
   try {
@@ -43,17 +51,27 @@ export async function saveAnalysis(
       confidence: viability.confidence,
       pest_risk_level: viability.pestRisk.level,
     });
-    if (error) throw error;
-    return true;
-  } catch {
-    saveAnalysisLocal(municipio, departamento, cultivo, lat, lng, viability);
-    return false;
+
+    if (error) {
+      console.warn("[AnalysisHistory] Failed to insert analysis record:", error.message);
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error de red";
+    console.warn("[AnalysisHistory] Exception saving analysis:", msg);
+    return { ok: false, error: msg };
   }
 }
 
+/**
+ * Retrieves persisted analyses from Supabase.
+ * Returns empty array with clean error logging if connection is unavailable.
+ */
 export async function getAnalysisHistory(): Promise<AnalysisRecord[]> {
   if (!isSupabaseConfigured()) {
-    return getAnalysisHistoryLocal();
+    return [];
   }
 
   try {
@@ -62,100 +80,36 @@ export async function getAnalysisHistory(): Promise<AnalysisRecord[]> {
       .select("*")
       .order("created_at", { ascending: false })
       .limit(50);
-    if (error) throw error;
-    return (data ?? []) as AnalysisRecord[];
-  } catch {
-    return getAnalysisHistoryLocal();
-  }
-}
 
-export async function deleteAnalysis(id: string): Promise<boolean> {
-  if (!isSupabaseConfigured()) {
-    deleteAnalysisLocal(id);
-    return true;
-  }
-
-  try {
-    const { error } = await supabase.from("analysis_history").delete().eq("id", id);
-    if (error) throw error;
-    return true;
-  } catch {
-    deleteAnalysisLocal(id);
-    return false;
-  }
-}
-
-// Local fallback using localStorage
-const LOCAL_KEY = "sembraData:analysisHistory";
-
-interface LocalAnalysis {
-  id: string;
-  municipio: string;
-  departamento: string;
-  cultivo: CropKey;
-  lat: number;
-  lng: number;
-  score: number;
-  viable: boolean;
-  recommendations: string[];
-  confidence: number;
-  pestRiskLevel: string;
-  created_at: string;
-}
-
-function saveAnalysisLocal(
-  municipio: string,
-  departamento: string,
-  cultivo: CropKey,
-  lat: number,
-  lng: number,
-  viability: ViabilityResult,
-) {
-  try {
-    const existing = getAnalysisHistoryLocal();
-    const record: LocalAnalysis = {
-      id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      municipio,
-      departamento,
-      cultivo,
-      lat,
-      lng,
-      score: viability.score,
-      viable: viability.viable,
-      recommendations: viability.recommendations,
-      confidence: viability.confidence,
-      pestRiskLevel: viability.pestRisk.level,
-      created_at: new Date().toISOString(),
-    };
-    existing.unshift(record);
-    const trimmed = existing.slice(0, 100);
-    localStorage.setItem(LOCAL_KEY, JSON.stringify(trimmed));
-  } catch {
-    // ignore
-  }
-}
-
-function getAnalysisHistoryLocal(): AnalysisRecord[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    if (!raw) return [];
-    const records: AnalysisRecord[] = JSON.parse(raw);
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const fresh = records.filter((r) => new Date(r.created_at).getTime() > thirtyDaysAgo);
-    if (fresh.length < records.length) {
-      localStorage.setItem(LOCAL_KEY, JSON.stringify(fresh));
+    if (error) {
+      console.warn("[AnalysisHistory] Error fetching history:", error.message);
+      return [];
     }
-    return fresh;
-  } catch {
+
+    return (data ?? []) as AnalysisRecord[];
+  } catch (err) {
+    console.warn("[AnalysisHistory] Network error fetching history:", err);
     return [];
   }
 }
 
-function deleteAnalysisLocal(id: string) {
+/**
+ * Deletes an analysis record from Supabase.
+ */
+export async function deleteAnalysis(id: string): Promise<AnalysisOperationResult> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Servicio de persistencia no configurado" };
+  }
+
   try {
-    const existing = getAnalysisHistoryLocal().filter((a) => a.id !== id);
-    localStorage.setItem(LOCAL_KEY, JSON.stringify(existing));
-  } catch {
-    // ignore
+    const { error } = await supabase.from("analysis_history").delete().eq("id", id);
+    if (error) {
+      console.warn("[AnalysisHistory] Error deleting analysis:", error.message);
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error de red";
+    return { ok: false, error: msg };
   }
 }

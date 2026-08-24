@@ -1,4 +1,4 @@
-import { getCachedNasaPower, setCachedNasaPower, type NasaPowerCacheRow } from "./cache";
+import { getCachedNasaPower } from "./cache";
 import { rateLimitedFetch } from "./rate-limiter";
 
 export interface NasaPowerDaily {
@@ -228,21 +228,6 @@ export async function fetchNasaPowerData(
       cloudOpacity: props.ALLSKY_SFC_LW_DWN?.[d] ?? 0,
       referenceEvapotranspiration: props.PET?.[d] ?? 0,
     }));
-
-  const cacheRows: NasaPowerCacheRow[] = daily.map((d) => ({
-    lat,
-    lng,
-    fecha: d.date,
-    temp_avg: d.tempAvg,
-    temp_max: d.tempMax,
-    temp_min: d.tempMin,
-    precipitacion: d.precipitation,
-    humedad: d.humidity,
-    velocidad_viento: d.windSpeed,
-    radiacion_solar: d.solarRadiation,
-    evapotranspiracion: d.evapotranspiration,
-  }));
-  setCachedNasaPower(cacheRows);
 
   return buildSummary(lat, lng, startDate, endDate, daily);
 }

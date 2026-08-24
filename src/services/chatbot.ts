@@ -20,32 +20,43 @@ export interface RecommendationContext {
   month: string;
 }
 
-function getScoreRange(score: number): string {
-  if (score >= 70) return "high";
-  if (score >= 50) return "mid";
-  return "low";
+export function computeContextHash(ctx: RecommendationContext): string {
+  const normMuni = ctx.municipio.toLowerCase().trim();
+  const normCrop = ctx.cultivo.toLowerCase().trim();
+  const roundedScore = Math.round(ctx.score / 5) * 5; // bins of 5 points
+  const roundedTemp = Math.round(ctx.temp);
+  const roundedPrecip = Math.round(ctx.precip / 15) * 15;
+  const roundedPh = Math.round(ctx.ph * 2) / 2;
+
+  return `${normMuni}:${normCrop}:${roundedScore}:${roundedTemp}c:${roundedPrecip}mm:ph${roundedPh}`;
 }
 
 async function getCachedRecommendation(
   municipio: string,
   cultivo: string,
-  scoreRange: string,
-): Promise<string | null> {
+  contextHash: string,
+): Promise<{ recommendation: string; cachedAt: string } | null> {
   try {
+    const nowIso = new Date().toISOString();
     const params = new URLSearchParams({
       municipio: `eq.${municipio}`,
       cultivo: `eq.${cultivo}`,
-      score_range: `eq.${scoreRange}`,
+      context_hash: `eq.${contextHash}`,
+      expires_at: `gt.${nowIso}`,
       order: "created_at.desc",
       limit: "1",
-      select: "recommendation",
+      select: "recommendation,created_at",
     });
     const r = await fetch(`${SUPABASE_REST}/recommendations_cache?${params}`, {
       headers: { apikey: CHAT_HEADERS.apikey, Authorization: CHAT_HEADERS.Authorization },
     });
     if (!r.ok) return null;
-    const rows = (await r.json()) as { recommendation: string }[];
-    return rows[0]?.recommendation ?? null;
+    const rows = (await r.json()) as { recommendation: string; created_at: string }[];
+    if (rows.length === 0 || !rows[0].recommendation) return null;
+    return {
+      recommendation: rows[0].recommendation,
+      cachedAt: rows[0].created_at,
+    };
   } catch {
     return null;
   }
@@ -54,11 +65,12 @@ async function getCachedRecommendation(
 async function cacheRecommendation(
   municipio: string,
   cultivo: string,
-  scoreRange: string,
+  contextHash: string,
   recommendation: string,
   context: RecommendationContext,
 ): Promise<void> {
   try {
+    const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(); // 6 hours TTL
     await fetch(`${SUPABASE_REST}/recommendations_cache`, {
       method: "POST",
       headers: {
@@ -68,9 +80,11 @@ async function cacheRecommendation(
       body: JSON.stringify({
         municipio,
         cultivo,
-        score_range: scoreRange,
+        context_hash: contextHash,
+        score_range: context.score >= 70 ? "high" : context.score >= 50 ? "mid" : "low",
         recommendation,
         context,
+        expires_at: expiresAt,
       }),
     });
   } catch {
@@ -79,10 +93,12 @@ async function cacheRecommendation(
 }
 
 export async function generateRecommendation(ctx: RecommendationContext): Promise<string | null> {
-  const scoreRange = getScoreRange(ctx.score);
+  const hash = computeContextHash(ctx);
 
-  const cached = await getCachedRecommendation(ctx.municipio, ctx.cultivo, scoreRange);
-  if (cached) return cached;
+  const cached = await getCachedRecommendation(ctx.municipio, ctx.cultivo, hash);
+  if (cached) {
+    return `${cached.recommendation}\n\n*(Recomendación en caché del ${new Date(cached.cachedAt).toLocaleDateString()})*`;
+  }
 
   try {
     const message = `Genera una recomendación agrícola concisa (máximo 3 oraciones) para ${ctx.cultivo} en ${ctx.municipio}, Santander.
@@ -96,10 +112,10 @@ Sé específico con el municipio y las condiciones actuales. Incluye una acción
     });
     if (!res.ok) return null;
     const data = await res.json();
-    const reply: string | null = data.reply ?? null;
+    const reply: string | null = data.answer ?? data.reply ?? null;
 
     if (reply) {
-      await cacheRecommendation(ctx.municipio, ctx.cultivo, scoreRange, reply, ctx);
+      await cacheRecommendation(ctx.municipio, ctx.cultivo, hash, reply, ctx);
     }
 
     return reply;
@@ -126,7 +142,7 @@ export function getSuggestions(crop?: string, municipio?: string): string[] {
     if (cropLower.includes("cacao")) {
       suggestions.push("¿Cuándo sembrar cacao?");
       suggestions.push("¿Qué enfermedades afectan al cacao?");
-      suggestions.push("¿Qué rendimiento esperar?");
+      suggestions.push("¿Qué rendimiento histórico se ha obtenido?");
     } else if (cropLower.includes("cafe") || cropLower.includes("café")) {
       suggestions.push("¿Cuándo sembrar café?");
       suggestions.push("¿Qué plagas afectan al café?");
@@ -139,13 +155,13 @@ export function getSuggestions(crop?: string, municipio?: string): string[] {
   }
 
   if (municipio) {
-    suggestions.push(`¿Cómo está el clima en ${municipio}?`);
-    suggestions.push(`¿Qué riesgo hay en ${municipio}?`);
+    suggestions.push(`¿Qué cultivo es viable en ${municipio}?`);
+    suggestions.push(`¿Cómo está el clima actual en ${municipio}?`);
   }
 
   suggestions.push("¿Qué significan los niveles de riesgo?");
   suggestions.push("¿Cómo hacer agricultura sostenible?");
-  suggestions.push("¿Qué financiación existe para agricultores?");
+  suggestions.push("¿Cuáles son los 87 municipios de Santander?");
 
   return suggestions.slice(0, 5);
 }

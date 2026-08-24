@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { fetchNasaPowerRecent, type NasaPowerDaily } from "@/services/nasa-power";
 import { HistoricalSkeleton } from "../Skeletons";
-import { saveOffline, getOffline } from "@/hooks/use-offline";
 import { getOptimalPastDays } from "@/services/temporal-optimizer";
 import type { CropKey } from "@/types/crops";
+import { WifiOff, RefreshCw } from "lucide-react";
 
 interface Props {
   lat: number;
@@ -15,24 +15,20 @@ interface Props {
   crop?: CropKey;
 }
 
-const CACHE_KEY = (lat: number, lng: number) => `nasa_recent_${lat.toFixed(2)}_${lng.toFixed(2)}`;
-
 export function HistoricalValidation({ lat, lng, forecastTemps, forecastPrecip, crop }: Props) {
-  const [historical, setHistorical] = useState<NasaPowerDaily[] | null>(() =>
-    getOffline<NasaPowerDaily[]>(CACHE_KEY(lat, lng)),
-  );
-  const [loading, setLoading] = useState(!historical);
-  const [isStale, setIsStale] = useState(false);
+  const [historical, setHistorical] = useState<NasaPowerDaily[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(
     async (signal?: AbortSignal) => {
-      const cached = getOffline<NasaPowerDaily[]>(CACHE_KEY(lat, lng));
-      if (cached) {
-        setHistorical(cached);
-        setIsStale(true);
-      }
+      setLoading(true);
+      setError(null);
 
-      if (!navigator.onLine) {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setError(
+          "Se requiere conexión a internet para consultar la validación satelital (NASA POWER).",
+        );
         setLoading(false);
         return;
       }
@@ -43,10 +39,11 @@ export function HistoricalValidation({ lat, lng, forecastTemps, forecastPrecip, 
         if (signal?.aborted) return;
         const daily = data.daily.slice(-Math.min(30, pastDays));
         setHistorical(daily);
-        setIsStale(false);
-        saveOffline(CACHE_KEY(lat, lng), daily);
       } catch {
-        if (!cached && !signal?.aborted) setHistorical(null);
+        if (!signal?.aborted) {
+          setError("No se pudieron obtener los datos satelitales en este momento.");
+          setHistorical(null);
+        }
       } finally {
         if (!signal?.aborted) setLoading(false);
       }
@@ -61,6 +58,28 @@ export function HistoricalValidation({ lat, lng, forecastTemps, forecastPrecip, 
   }, [fetchData]);
 
   if (loading) return <HistoricalSkeleton />;
+
+  if (error && (!historical || historical.length === 0)) {
+    return (
+      <Card className="rounded-2xl border-dashed">
+        <CardContent className="py-6 flex flex-col items-center justify-center text-center gap-2">
+          <WifiOff className="h-6 w-6 text-muted-foreground" />
+          <p className="text-xs text-muted-foreground max-w-sm">{error}</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => fetchData()}
+            className="mt-1 h-7 rounded-lg text-xs"
+          >
+            <RefreshCw className="h-3 w-3 mr-1.5" />
+            Reintentar
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!historical || historical.length === 0) return null;
 
   const histAvgMax = historical.reduce((s, d) => s + d.tempMax, 0) / historical.length;
@@ -89,11 +108,6 @@ export function HistoricalValidation({ lat, lng, forecastTemps, forecastPrecip, 
           <CardTitle className="text-base font-semibold">
             Validación Histórica (NASA POWER)
           </CardTitle>
-          {isStale && (
-            <Badge variant="secondary" className="text-sm">
-              Datos guardados
-            </Badge>
-          )}
         </div>
         <p className="text-sm text-muted-foreground">
           Comparación pronóstico vs últimos 30 días reales

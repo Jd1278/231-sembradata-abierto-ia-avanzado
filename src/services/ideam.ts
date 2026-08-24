@@ -1,8 +1,4 @@
-import {
-  getCachedIdeamObservations,
-  setCachedIdeamObservations,
-  type IdeamCacheRow,
-} from "./cache";
+import { getCachedIdeamObservations } from "./cache";
 import { rateLimitedFetch } from "./rate-limiter";
 
 const SOCRATA_BASE = "https://www.datos.gov.co/resource";
@@ -172,19 +168,6 @@ export async function fetchIdeamObservations(
     radiacionSolar: r.radiacion_solar != null ? Number(r.radiacion_solar) : null,
     estacionId: String(r.estacion_id ?? estacionId),
   }));
-
-  const cacheRows: IdeamCacheRow[] = observations.map((o) => ({
-    estacion_id: o.estacionId,
-    fecha: o.fecha,
-    temperatura: o.temperatura,
-    humedad: o.humedad,
-    precipitacion: o.precipitacion,
-    velocidad_viento: o.velocidadViento,
-    direccion_viento: o.direccionViento,
-    presion: o.presion,
-    radiacion_solar: o.radiacionSolar,
-  }));
-  setCachedIdeamObservations(cacheRows);
 
   return observations;
 }

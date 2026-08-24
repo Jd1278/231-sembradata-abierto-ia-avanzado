@@ -195,7 +195,11 @@ describe("Phase 5: Map Compatibility & Zonal Agroclimatic Yield Prediction Engin
         municipalityId: "san_vicente_de_chucuri",
         municipalityName: "San Vicente de Chucurí",
         crop: "granadilla",
-        historicalRecords: [],
+        historicalRecords: [
+          { year: 2022, yield: 8.5 },
+          { year: 2023, yield: 9.0 },
+          { year: 2024, yield: 9.2 },
+        ],
         features,
         futureYears: [2025],
       });
@@ -228,7 +232,11 @@ describe("Phase 5: Map Compatibility & Zonal Agroclimatic Yield Prediction Engin
         municipalityId: "san_gil",
         municipalityName: "San Gil",
         crop: "cafe",
-        historicalRecords: [{ year: 2024, yield: 1.25 }],
+        historicalRecords: [
+          { year: 2022, yield: 1.2 },
+          { year: 2023, yield: 1.22 },
+          { year: 2024, yield: 1.25 },
+        ],
         features: optimalClimateFeatures,
         futureYears: [2025],
       });
@@ -237,7 +245,11 @@ describe("Phase 5: Map Compatibility & Zonal Agroclimatic Yield Prediction Engin
         municipalityId: "san_gil",
         municipalityName: "San Gil",
         crop: "cafe",
-        historicalRecords: [{ year: 2024, yield: 1.25 }],
+        historicalRecords: [
+          { year: 2022, yield: 1.2 },
+          { year: 2023, yield: 1.22 },
+          { year: 2024, yield: 1.25 },
+        ],
         features: stressedClimateFeatures,
         futureYears: [2025],
       });

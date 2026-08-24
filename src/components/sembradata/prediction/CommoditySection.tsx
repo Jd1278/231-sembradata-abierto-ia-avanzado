@@ -1,33 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { fetchCommodityPrices, type CommodityPrice } from "@/services/commodity-price";
 import type { CropKey } from "@/types/crops";
 import { CommoditySkeleton } from "../Skeletons";
-import { saveOffline, getOffline } from "@/hooks/use-offline";
+import { WifiOff, RefreshCw } from "lucide-react";
 
 interface Props {
   activeCrop: CropKey;
 }
 
-const CACHE_KEY = "commodity_prices";
-
 export function CommoditySection({ activeCrop }: Props) {
-  const [prices, setPrices] = useState<CommodityPrice[]>(
-    () => getOffline<CommodityPrice[]>(CACHE_KEY) ?? [],
-  );
+  const [prices, setPrices] = useState<CommodityPrice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isStale, setIsStale] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    const cached = getOffline<CommodityPrice[]>(CACHE_KEY);
-    if (cached && cached.length > 0) {
-      setPrices(cached);
-      setIsStale(true);
-      setLoading(false);
-    }
+    setLoading(true);
+    setError(null);
 
     if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setError(
+        "Se requiere conexión a internet para consultar precios internacionales de mercado.",
+      );
       setLoading(false);
       return;
     }
@@ -35,11 +31,9 @@ export function CommoditySection({ activeCrop }: Props) {
     try {
       const data = await fetchCommodityPrices();
       setPrices(data);
-      setIsStale(false);
-      saveOffline(CACHE_KEY, data);
     } catch (err) {
-      console.warn("[CommoditySection] fetch error, preserving cached state:", err);
-      if (!cached || cached.length === 0) setPrices([]);
+      console.warn("[CommoditySection] fetch error:", err);
+      setError("No se pudieron cargar los precios de commodities en este momento.");
     } finally {
       setLoading(false);
     }
@@ -50,6 +44,28 @@ export function CommoditySection({ activeCrop }: Props) {
   }, [fetchData]);
 
   if (loading) return <CommoditySkeleton />;
+
+  if (error && prices.length === 0) {
+    return (
+      <Card className="rounded-2xl border-dashed">
+        <CardContent className="py-6 flex flex-col items-center justify-center text-center gap-2">
+          <WifiOff className="h-6 w-6 text-muted-foreground" />
+          <p className="text-xs text-muted-foreground max-w-sm">{error}</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => fetchData()}
+            className="mt-1 h-7 rounded-lg text-xs"
+          >
+            <RefreshCw className="h-3 w-3 mr-1.5" />
+            Reintentar
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (prices.length === 0) return null;
 
   const active = prices.find((p) => p.crop === activeCrop);
@@ -94,7 +110,7 @@ export function CommoditySection({ activeCrop }: Props) {
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-semibold">Precio de Futuros Internacionales</CardTitle>
           <div className="flex items-center gap-1.5">
-            {(isStale || active.isCached) && (
+            {active.isCached && (
               <Badge variant="secondary" className="text-[9px]">
                 Dato en cache
               </Badge>

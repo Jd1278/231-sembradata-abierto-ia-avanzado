@@ -1,4 +1,4 @@
-﻿import { test, expect } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 
 test.describe("SembraData — Flujo principal", () => {
   test("carga el dashboard y muestra los KPIs", async ({ page }) => {
@@ -169,11 +169,11 @@ test.describe("SembraData — Comparación de zonas", () => {
   });
 });
 
-test.describe("SembraData — Indicador offline", () => {
-  test("el componente offline existe en el DOM", async ({ page }) => {
+test.describe("SembraData — Banner de conectividad", () => {
+  test("el banner de desconexión no se muestra cuando hay conexión activa", async ({ page }) => {
     await page.goto("/");
 
-    const indicator = page.locator('[class*="fixed"][class*="bottom-0"]');
+    const indicator = page.locator('[role="alert"]');
     await expect(indicator).toHaveCount(0);
   });
 });

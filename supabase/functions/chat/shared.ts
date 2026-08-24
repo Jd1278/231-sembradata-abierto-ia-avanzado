@@ -1,3 +1,5 @@
+import type { DeterministicContext } from "./deterministic.ts";
+
 export type Intent =
   | "CROP_RECOMMENDATION"
   | "CROP_RISK_ANALYSIS"
@@ -5,18 +7,6 @@ export type Intent =
   | "GENERAL"
   | "GREETING"
   | "UNKNOWN";
-
-export interface RealTimeData {
-  clima: {
-    current?: { temperature_2m: number; relative_humidity_2m: number };
-    daily?: {
-      temperature_2m_min: number[];
-      temperature_2m_max: number[];
-      precipitation_sum: number[];
-    };
-  } | null;
-  suelo: { ph: number; textura: string } | null;
-}
 
 export function classifyIntent(msg: string): Intent {
   const ascii = msg
@@ -69,75 +59,73 @@ export function classifyIntent(msg: string): Intent {
   return "UNKNOWN";
 }
 
-const SYSTEM_PREAMBLE = `Eres un agrónomo experto en Santander, Colombia. Responde en español, sé conciso (<300 palabras), usa emojis.`;
+const SYSTEM_PREAMBLE = `Eres el Asistente Agroclimático Oficial de SembraData para el departamento de Santander, Colombia.
+Tu propósito es explicar de manera pedagógica, concisa y 100% verificable los datos agroclimáticos reales de la plataforma.
 
-function fmtClima(municipio: string, data: RealTimeData): string {
-  const lines = [`### Datos reales de ${municipio}`];
-  if (data.clima) {
-    const precip7d = (data.clima.daily?.precipitation_sum ?? []).reduce(
-      (a: number, b: number) => a + b,
-      0,
-    );
-    const tempMin = data.clima.daily?.temperature_2m_min?.[0];
-    const tempMax = data.clima.daily?.temperature_2m_max?.[0];
-    lines.push(
-      `- Open-Meteo:`,
-      `  - Temp actual: ${data.clima.current?.temperature_2m ?? "N/A"}°C${tempMin != null && tempMax != null ? ` (rango ${tempMin}-${tempMax}°C)` : ""}`,
-      `  - Precip 7d: ${precip7d} mm`,
-      `  - Humedad: ${data.clima.current?.relative_humidity_2m ?? "N/A"}%`,
-    );
-  }
-  if (data.suelo) {
-    lines.push(
-      `- SoilGrids:`,
-      `  - pH suelo: ${data.suelo.ph ?? "N/A"}`,
-      `  - Textura: ${data.suelo.textura ?? "N/A"}`,
-    );
-  }
-  if (!data.clima && !data.suelo) {
-    lines.push("(Datos climáticos no disponibles)");
-  }
-  return lines.join("\n");
-}
+REGLAS DE ORO OBLIGATORIAS (ANTI-ALUCINACIÓN):
+1. Responde EXCLUSIVAMENTE en formato JSON válido.
+2. NO INVENTES ninguna cifra, porcentaje de viabilidad, rendimiento futuro, fecha de datos ni fuentes.
+3. Toda afirmación cuantitativa (temperatura, precipitación, altitud, rendimiento en ton/ha, pH) debe extraerse literalmente de los "Hechos Verificados" proporcionados.
+4. Distingue estrictamente entre:
+   - "observed": Datos históricos reales observados por EVA / MinAgricultura.
+   - "forecast": Pronósticos meteorológicos de Open-Meteo.
+   - "model_estimate": Predicciones estadísticas oficiales de SembraData (Theil-Sen / Rolling Backtest).
+   - "agronomic_requirement": Parámetros técnicos oficiales (Cenicafé, Fedecacao, AGROSAVIA).
+   - "general_guidance": Orientaciones técnicas y buenas prácticas generales.
+5. Si falta un dato para responder a cabalidad, escribe con honestidad "dato no disponible" y establece "insufficientData": true.
+6. Nunca presentes una predicción como un hecho histórico observado.
+7. Nunca presentes una orientación general como si fuera una medición actual del municipio.`;
 
 export function buildSystemPrompt(
   intent: Intent,
-  municipio: string,
-  data: RealTimeData | null,
+  deterministicContext: DeterministicContext,
   ragContext: string,
 ): string {
   const sections: string[] = [SYSTEM_PREAMBLE];
 
+  // 1. Contexto Determinista
+  sections.push("### HECHOS Y DATOS VERIFICADOS (ÚNICA FUENTE FACTUAL PERMITIDA)");
+
+  if (deterministicContext.verifiedFacts.length > 0) {
+    sections.push(deterministicContext.verifiedFacts.map((f) => `- ${f}`).join("\n"));
+  } else {
+    sections.push(
+      "- No se dispone de observaciones directas registradas para los parámetros consultados.",
+    );
+  }
+
+  // 2. Documentación Técnica RAG
   if (ragContext) {
-    sections.push(`\n### Knowledge Base (fuente confiable)\n${ragContext}`);
-  }
-  if (data && municipio) {
-    sections.push(fmtClima(municipio, data));
+    sections.push(`### MANUAL TÉCNICO AGRONÓMICO (GUÍA GENERAL)\n${ragContext}`);
   }
 
-  sections.push(buildInstructions(intent));
+  // 3. Instrucción de Formato JSON
+  sections.push(`### ESQUEMA JSON OBLIGATORIO DE RESPUESTA:
+{
+  "answer": "Texto enriquecido en markdown para el agricultor (<250 palabras), claro, empático y estructurado con viñetas.",
+  "summary": "Resumen ejecutivo de 1 o 2 oraciones.",
+  "claims": [
+    {
+      "text": "Afirmación específica basada en los datos",
+      "claimType": "observed" | "forecast" | "model_estimate" | "agronomic_requirement" | "general_guidance",
+      "source": "Nombre exacto de la fuente institucional (ej. EVA / MinAgricultura, Open-Meteo, Cenicafé)",
+      "observedAt": "Fecha o periodo ISO (ej. 2024 o 2026-08-24) o null",
+      "value": 24.5,
+      "unit": "°C",
+      "confidence": 90
+    }
+  ],
+  "recommendations": [
+    {
+      "action": "Acción práctica agronómica recomendada",
+      "basis": ["Cita de fuente o claim que la respalda"],
+      "priority": "high" | "medium" | "low"
+    }
+  ],
+  "uncertainties": ["Lista de incertidumbres o datos faltantes si aplica"],
+  "insufficientData": false,
+  "needsHumanReview": false
+}`);
+
   return sections.join("\n\n");
-}
-
-function buildInstructions(intent: Intent): string {
-  switch (intent) {
-    case "CROP_RECOMMENDATION":
-      return `### Instrucciones
-1. Recomienda los 3 cultivos más viables ordenados por confianza.
-2. Para cada: % de confianza, por qué viable (según datos reales), 1 riesgo principal.
-3. Si el usuario menciona un cultivo específico, enfócate en él.`;
-    case "CROP_RISK_ANALYSIS":
-      return `### Instrucciones
-1. Calcula probabilidad de éxito (0-100%).
-2. Lista 3 riesgos principales con nivel (Alto/Medio/Bajo).
-3. Da 2 recomendaciones prácticas para mitigar riesgos.`;
-    case "CROP_REQUIREMENTS":
-      return `### Instrucciones
-1. Haz un checklist: ¿cumple o no cada requisito?
-2. Indica qué falta y cómo corregirlo.
-3. Sé práctico y accionable.`;
-    default:
-      return `### Instrucciones
-Responde de forma útil y basada en datos. Si no sabes, sugiere preguntar a un técnico local.`;
-  }
 }

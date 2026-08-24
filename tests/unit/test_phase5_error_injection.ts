@@ -64,7 +64,7 @@ describe("Phase 5: Fault Injection & Boundary Error Analysis", () => {
   describe("2. Prediction Model Faults, Outliers & Zero Division Safeguards", () => {
     const baseFeatures = extractClimateFeatures("Bucaramanga", "bucaramanga", null);
 
-    it("handles single-point historical data without division by zero in trend regression", () => {
+    it("returns zero predictions when given fewer than 3 historical points without synthetic fallback", () => {
       const singlePointHistory = [{ year: 2024, yield: 1.25 }];
 
       const preds = calculateAgroclimaticYieldPrediction({
@@ -76,14 +76,12 @@ describe("Phase 5: Fault Injection & Boundary Error Analysis", () => {
         futureYears: [2025, 2026],
       });
 
-      expect(preds.length).toBe(2);
-      expect(Number.isFinite(preds[0].predictedValue)).toBe(true);
-      expect(preds[0].predictedValue).toBeGreaterThan(0);
-      expect(preds[0].scores?.trendFactor).toBe(1.0);
+      expect(preds.length).toBe(0);
     });
 
     it("discards corrupt, NaN or negative yields from historical series", () => {
       const corruptedHistory = [
+        { year: 2019, yield: 1.2 },
         { year: 2020, yield: Number.NaN },
         { year: 2021, yield: -5.0 },
         { year: 2022, yield: 0 },
@@ -118,7 +116,11 @@ describe("Phase 5: Fault Injection & Boundary Error Analysis", () => {
         municipalityId: "bucaramanga",
         municipalityName: "Bucaramanga",
         crop: "cafe",
-        historicalRecords: [{ year: 2024, yield: 1.2 }],
+        historicalRecords: [
+          { year: 2022, yield: 1.2 },
+          { year: 2023, yield: 1.22 },
+          { year: 2024, yield: 1.25 },
+        ],
         features: extremeFeatures,
         futureYears: [2025],
       });

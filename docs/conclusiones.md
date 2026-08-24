@@ -1,32 +1,31 @@
-# Conclusiones
+# Conclusiones y Evaluación del Sistema — SembraData
 
-## Hallazgos Principales
+Evaluación técnica, hallazgos, fortalezas, limitaciones y perspectivas de SembraData.
 
-1. **Cobertura departamental:** La plataforma cubre exitosamente los 87 municipios del departamento de Santander, con datos climáticos de 5 APIs externas integradas (Open-Meteo, NASA POWER, IDEAM, SoilGrids, Commodity Forecast) más Groq y Supabase.
+---
 
-2. **Motor de predicción v2:** El modelo predictivo mejorado incorpora 8 factores ponderados (temperatura, precipitación, humedad, suelo, altitud, estacionalidad, plagas, cultivo específico) con score de confianza.
+## 1. Hallazgos Principales
 
-3. **Diversidad de fuentes de datos:** La integración de 5 APIs externas (Open-Meteo, NASA POWER, IDEAM, SoilGrids, Commodity Forecast) más el chatbot con Groq (Llama 3.1 8B) y Supabase como backend proporciona una visión agroclimática integral.
+1. **Cobertura Territorial Exacta:** SembraData cubre los **87 municipios del departamento de Santander**, delimitando con precisión geográfica coordenadas, altitud y zonas agroecológicas para Café, Cacao y Granadilla.
+2. **Integridad Estadística y Cero Alucinación Numérica:** El motor de predicción basado en el estimador robusto **Theil-Sen** proyecta rendimientos con intervalos de predicción al 80% y 95% ($L_{80}, U_{80}, L_{95}, U_{95}$) a partir de series observadas de **EVA / MinAgricultura**, eliminando cualquier generación de datos sintéticos cuando $N < 3$.
+3. **Rol Delimitado de la Inteligencia Artificial:**
+   - **Groq Cloud (`openai/gpt-oss-20b`):** Proporciona asistencia conversacional fluida ligada estrictamente a datos deterministas y conocimiento agroclimático institucional verificado mediante RAG y validación Zod.
+   - **Google Gemini 2.0 Flash (`gemini-assessment`):** Emite evaluaciones agronómicas cualitativas de viabilidad biológica sin intervenir ni manipular los valores estadísticos numéricos.
+4. **Arquitectura Segura y Conectada:** La plataforma implementa políticas RLS completas (Migración 009), frontend de solo lectura, aislamiento de anomalías en `data_quality_quarantine` y control estricto de CORS en Edge Functions.
+5. **Calidad y Rendimiento de Software:** 51 archivos de prueba con 392 tests unitarios e integración pasando al 100%, renderizado SSR en Nitro sobre Node 22 Alpine y compilación de producción optimizada.
 
-4. **Chatbot inteligente:** El chatbot mejorado con memoria de conversación, sistema de sinónimos, detección de intención y 50+ entradas de conocimiento ofrece asesoría agrícola contextualizada.
+---
 
-5. **Accesibilidad y rendimiento:** La aplicación cumple WCAG 2.1 con focus trapping, navegación por teclado y aria-live. El code splitting reduce el chunk principal 99.8% (820 KB → 1.3 KB).
+## 2. Limitaciones Identificadas
 
-6. **Offline-first:** IndexedDB almacena análisis completos offline (30 días TTL), Service Worker v2 con stale-while-revalidate y fallback offline funcional.
+- **Disponibilidad de Registros Históricos:** Ciertos municipios presentan series históricas de EVA con menos de 3 observaciones válidas para cultivos específicos; en estos casos, el sistema declara honestamente `insufficient_data` para proteger la toma de decisiones del productor.
+- **Ventana de Pronóstico Meteorológico:** La predicción meteorológica directa depende de la ventana física de 7 días de Open-Meteo y series satelitales históricas de NASA POWER.
+- **Conectividad Obligatoria:** SembraData exige conexión a internet activa para garantizar que nunca se expongan datos desactualizados o no sincronizados como información en vivo.
 
-## Limitaciones
+---
 
-- Disponibilidad limitada de datos climáticos estacionales en zonas rurales remotas
-- Calidad variable de los registros históricos de rendimiento por departamento
-- Dependencia de APIs externas gratuitas con posibles límites de tasa
-- Los pronósticos climáticos se limitan a la ventana disponible de Open-Meteo (7 días de pronóstico, 90 días de históricos)
+## 3. Perspectivas Futuras
 
-## Próximos Pasos
-
-1. Integrar datos satelitales (NDVI) para monitoreo en tiempo real de cobertura vegetal
-2. Implementar sistema de alertas tempranas automatizadas con notificaciones push
-3. Expandir a otros cultivos estratégicos (aguacate, plátano, caña de azúcar)
-4. Desarrollar módulo de recomendaciones prescriptivas con IA generativa
-5. Establecer alianzas con IDEAM y DANE para acceso a datos en tiempo real
-6. Implementar dashboard de monitoreo de calidad del aire por departamento
-7. Desarrollar mobile app nativa (React Native) con sincronización offline
+1. Incorporación de capas satelitales adicionales (Sentinel-2) para monitoreo de humedad foliar y biomasa.
+2. Ampliación del catálogo de requerimientos agroclimáticos a cultivos de ciclo corto (maíz, frijol, plátano).
+3. Integración de alertas meteorológicas tempranas automatizadas vía mensajería instantánea institucional.

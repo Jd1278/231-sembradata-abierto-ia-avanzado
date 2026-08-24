@@ -25,7 +25,8 @@ import { YieldChart } from "./YieldChart";
 import { RiskChart } from "./RiskChart";
 import { MUNICIPIOS, CROP_DATA, computeAltitude } from "./data";
 import type { CropKey, SoilType } from "@/types/crops";
-import { OfflineIndicator } from "./OfflineIndicator";
+import { ConnectivityBanner } from "./ConnectivityBanner";
+import { useNetworkStatus } from "@/hooks/use-network-status";
 import { AdvancedFilters, type AdvancedFilterValues } from "./AdvancedFilters";
 import { isMunicipalityCompatible, hasActiveAdvancedFilters } from "@/services/map-compatibility";
 import { FilterBlock } from "./dashboard/FilterBlock";
@@ -106,6 +107,7 @@ export function Dashboard() {
   const [aiRecommendation, setAiRecommendation] = useState<string | null>(null);
   const [mapStates, setMapStates] = useState<Record<string, MunicipalityClimateState> | null>(null);
   const [mapStateError, setMapStateError] = useState<string | null>(null);
+  const { isOnline, lastOnlineAt } = useNetworkStatus();
 
   const hasActiveFilters = useMemo(() => hasActiveAdvancedFilters(filters), [filters]);
 
@@ -169,6 +171,19 @@ export function Dashboard() {
     abortRef.current = controller;
     const gen = ++fetchGen.current;
     setRealtime({ climate: null, soil: null, viability: null, loading: true, error: null });
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      if (gen === fetchGen.current)
+        setRealtime({
+          climate: null,
+          soil: null,
+          viability: null,
+          loading: false,
+          error: "Se requiere conexión a internet para consultar datos climáticos actualizados.",
+        });
+      return;
+    }
+
     try {
       const currentYear = new Date().getFullYear();
       const selectedYear = Number(year);
@@ -393,7 +408,14 @@ export function Dashboard() {
             })}
           </div>
 
-          <div className="flex items-center gap-1.5"></div>
+          <div className="flex items-center gap-1.5">
+            {lastOnlineAt && (
+              <span className="hidden text-[11px] text-muted-foreground md:inline-block">
+                Sincronizado:{" "}
+                {lastOnlineAt.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+          </div>
         </div>
       </header>
 
@@ -680,8 +702,14 @@ export function Dashboard() {
                       size="sm"
                       className="rounded-xl text-xs"
                       aria-label="Analizar zona seleccionada"
+                      disabled={!isOnline}
+                      title={
+                        !isOnline
+                          ? "Se requiere conexión a internet para analizar la zona"
+                          : undefined
+                      }
                       onClick={() => {
-                        if (muni) setShowPrediction(true);
+                        if (muni && isOnline) setShowPrediction(true);
                       }}
                     >
                       Analizar zona
@@ -804,7 +832,11 @@ export function Dashboard() {
           <ChatbotPanel municipio={muni?.name ?? ""} crop={cropInfo.label} />
         </Suspense>
       </SectionErrorBoundary>
-      <OfflineIndicator />
+      <ConnectivityBanner
+        onRetry={() => {
+          fetchRealtimeData();
+        }}
+      />
     </div>
   );
 }

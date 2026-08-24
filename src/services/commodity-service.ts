@@ -1,5 +1,5 @@
 import type { CropKey } from "@/types/crops";
-import { getCachedCommodity, setCachedCommodity } from "./cache";
+import { getCachedCommodity } from "./cache";
 import { rateLimitedFetch } from "./rate-limiter";
 
 export interface CommodityPrice {
@@ -96,7 +96,6 @@ export class HttpCommodityPriceProvider implements CommodityPriceProvider {
       throw new Error(`Invalid commodity API payload for ${symbol}`);
     }
 
-    void setCachedCommodity(symbol, data);
     return data;
   }
 }

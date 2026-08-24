@@ -25,18 +25,17 @@
 
 - **Sesgo algorítmico:** Se implementan pruebas de equidad territorial (bias_tests/) para evitar discriminación de municipios pequeños
 - **Privacidad:** No se recopilan datos personales de agricultores individuales
-- **Transparencia:** Los modelos incluyen métricas de confianza y explicabilidad
-- **Accesibilidad:** La plataforma cumple WCAG 2.1 (focus trap, keyboard nav, aria-live)
-- **Offline-first:** IndexedDB permite uso sin conexión (30 días de datos offline)
-- **Multi-idioma:** Soporte Español/Inglés para diversidad cultural
+- **Transparencia:** Los modelos incluyen métricas de confianza e intervalos estadísticos reproducibles ($L_{80}, U_{80}, L_{95}, U_{95}$).
+- **Accesibilidad:** La plataforma cumple WCAG 2.1 (focus trap, keyboard nav, aria-live).
+- **Conectividad y Veracidad:** Exige conexión en tiempo real para evitar mostrar datos obsoletos como actuales.
+- **Multi-idioma:** Soporte Español/Inglés para diversidad cultural.
 
 ## Mitigación de Riesgos
 
-| Riesgo                          | Probabilidad | Impacto | Mitigación                                               |
-| ------------------------------- | ------------ | ------- | -------------------------------------------------------- |
-| Sesgo territorial               | Media        | Alto    | Pruebas de equidad automatizadas                         |
-| Datos incompletos               | Alta         | Medio   | 5 APIs externas + cache con TTL + interpolación temporal |
-| Dependencia de fuentes externas | Media        | Alto    | Múltiples fuentes + cache con TTL + fallback offline     |
-| Baja adopción                   | Media        | Medio   | Interfaz intuitiva, PWA, capacitación                    |
-| Limitaciones de API             | Baja         | Medio   | Rate limiting + exponential backoff + cache              |
-| Eventos extremos                | Media        | Alto    | Alertas tempranas (Open-Meteo, NASA POWER)               |
+| Riesgo                                   | Probabilidad | Impacto | Mitigación                                                                                 |
+| ---------------------------------------- | ------------ | ------- | ------------------------------------------------------------------------------------------ |
+| Sesgo territorial                        | Media        | Alto    | Pruebas de equidad territorial automatizadas en los 87 municipios.                         |
+| Muestra histórica insuficiente ($N < 3$) | Alta         | Alto    | Política de 0 datos sintéticos; declaración formal de `insufficient_data`.                 |
+| Dependencia de fuentes externas          | Media        | Medio   | Múltiples fuentes meteorológicas (Open-Meteo, IDEAM, NASA POWER) + Caché server-side.      |
+| Alucinaciones en IA                      | Media        | Alto    | Chatbot Groq con validación Zod, RAG con umbral $\ge 3.0$ y cotejo determinista de claims. |
+| Eventos extremos                         | Media        | Alto    | Alertas agroclimáticas tempranas y evaluación cualitativa con Gemini 2.0 Flash.            |

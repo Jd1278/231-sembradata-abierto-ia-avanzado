@@ -721,14 +721,20 @@ function scoreEntry(query: string, entry: RagEntry): number {
   return keywordMatches * 3 + questionMatch * 2 + tokenOverlap * 10;
 }
 
-export function searchKnowledgeBase(query: string, topK = 2): RagResult[] {
+export const MIN_RAG_RELEVANCE_SCORE = 3.0;
+
+export function searchKnowledgeBase(
+  query: string,
+  topK = 2,
+  minScore = MIN_RAG_RELEVANCE_SCORE,
+): RagResult[] {
   const results: RagResult[] = KNOWLEDGE_BASE.map((entry) => ({
     entry,
     score: scoreEntry(query, entry),
   }));
 
   return results
-    .filter((r) => r.score > 0)
+    .filter((r) => r.score >= minScore)
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
 }
@@ -746,5 +752,10 @@ export function getEntriesByCategory(category: string): RagEntry[] {
 
 export function formatRagContext(results: RagResult[]): string {
   if (results.length === 0) return "";
-  return results.map((r, i) => `[${i + 1}] ${r.entry.question}\n${r.entry.answer}`).join("\n\n");
+  return results
+    .map(
+      (r, i) =>
+        `[Documento Agronómico ${i + 1} | Fuente: Manual Técnico ICA / Fedecacao / Cenicafé (v2.0)]\nPregunta: ${r.entry.question}\nContenido: ${r.entry.answer}`,
+    )
+    .join("\n\n");
 }

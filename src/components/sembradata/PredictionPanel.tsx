@@ -74,6 +74,7 @@ export function PredictionPanel({
   const [climate, setClimate] = useState<ClimateData | null>(null);
   const [viability, setViability] = useState<ViabilityResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const panel = panelRef.current;
@@ -118,6 +119,16 @@ export function PredictionPanel({
     async function load() {
       setLoading(true);
       setError(null);
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        if (!cancelled) {
+          setError(
+            "Se requiere conexión a internet para consultar datos de satélite, suelo y estaciones agroclimáticas.",
+          );
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         // Fetch elevation from Open-Meteo
         const elevController = new AbortController();
@@ -182,7 +193,7 @@ export function PredictionPanel({
     return () => {
       cancelled = true;
     };
-  }, [lat, lng, crop, altitude, municipio, departamento, month, sharedClimate]);
+  }, [lat, lng, crop, altitude, municipio, departamento, month, sharedClimate, retryCount]);
 
   return (
     <div
@@ -217,12 +228,24 @@ export function PredictionPanel({
             </p>
           </div>
         ) : error ? (
-          <Card className="rounded-2xl">
-            <CardContent className="py-10 text-center">
+          <Card className="rounded-2xl border-dashed">
+            <CardContent className="py-10 text-center flex flex-col items-center gap-2">
               <p className="text-sm text-destructive">{error}</p>
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Verifica tu conexión a internet e intenta de nuevo.
               </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setError(null);
+                  setRetryCount((c) => c + 1);
+                }}
+                className="mt-2 h-8 rounded-xl text-xs"
+              >
+                Reintentar análisis
+              </Button>
             </CardContent>
           </Card>
         ) : (

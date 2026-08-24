@@ -1,94 +1,97 @@
-# Arquitectura de SembraData
+# Arquitectura de Sistemas — SembraData
 
-## Diagrama de Componentes
+Documentación técnica de la arquitectura full-stack, flujo de datos, seguridad y servicios de SembraData.
 
+---
+
+## 1. Diagrama de Componentes del Sistema
+
+```mermaid
+flowchart TD
+    subgraph CapaFrontend["1. Capa Frontend (React 19 + TanStack Start SSR)"]
+        Dashboard[Dashboard / Mapa Coroplético 87 Municipios]
+        PredPanel[Panel de Viabilidad y Pronóstico]
+        HistValidation[Gráfico Histórico vs. Predicción]
+        ChatbotUI[Panel de Chatbot Asistente con Acordeón de Claims]
+        NetWatcher[Detector de Red Online Obligatorio]
+    end
+
+    subgraph CapaSSR["2. Capa Servidor Nitro (node-server)"]
+        NitroServer[Nitro SSR Engine en Node 22 Alpine]
+        StaticAssets[Static Assets y Chunks Optimizados]
+    end
+
+    subgraph CapaEdge["3. Capa de Servicios Serverless (Supabase Edge Functions en Deno)"]
+        ChatEdge["Edge Function: chat\n(Groq openai/gpt-oss-20b + Motor Determinista + RAG)"]
+        GeminiEdge["Edge Function: gemini-assessment\n(Google Gemini 2.0 Flash)"]
+    end
+
+    subgraph CapaPersistencia["4. Capa de Persistencia y Seguridad (Supabase PostgreSQL)"]
+        MuniCat[(municipios: 87 Santander)]
+        EvaHist[(rendimiento_historico: EVA MinAgr)]
+        PredVers[(predicciones_agroclimaticas: Theil-Sen)]
+        Requirements[(crop_climate_requirements)]
+        Conversations[(chat_conversations: service_role)]
+        Quarantine[(data_quality_quarantine)]
+        CacheStore[(ideam_cache / nasa_power_cache)]
+    end
+
+    subgraph CapaAPIs["5. Fuentes Agroclimáticas Externas (Directas / Gateway)"]
+        OpenMeteo[Open-Meteo API: Clima en tiempo real y 7d]
+        SoilGrids[SoilGrids ISRIC: Pedología por profundidades]
+        NasaPower[NASA POWER: Radiación solar y evapotranspiración]
+        IdeamSocrata[IDEAM datos.gov.co: Estaciones meteorológicas]
+        GroqCloud[Groq Cloud: Inferencia ultra-rápida]
+        GoogleAI[Google Generative Language: Gemini AI]
+    end
+
+    Dashboard --> NitroServer
+    NitroServer --> CapaFrontend
+    Dashboard & PredPanel & HistValidation --> NetWatcher
+    Dashboard --> OpenMeteo & SoilGrids & NasaPower & IdeamSocrata
+    HistValidation -->|Lectura pública| EvaHist & PredVers
+    PredPanel -->|Invocación| GeminiEdge
+    ChatbotUI -->|Invocación CORS segura| ChatEdge
+    ChatEdge -->|service_role write/read| MuniCat & EvaHist & PredVers & Requirements & Conversations
+    ChatEdge --> GroqCloud & OpenMeteo & SoilGrids
+    GeminiEdge --> GoogleAI
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                       FRONTEND (React 19)                       │
-│  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌──────────────┐  │
-│  │ Dashboard │  │ MapView  │  │ Chatbot   │  │ Prediction   │  │
-│  │ (KPIs)   │  │ (SVG)    │  │ Panel     │  │ Panel        │  │
-│  │ lazy     │  │ keyboard │  │ memory +  │  │ focus trap   │  │
-│  │ loaded   │  │ nav      │  │ markdown  │  │ + aria-live  │  │
-│  └────┬─────┘  └────┬─────┘  └─────┬─────┘  └──────┬───────┘  │
-│       │              │              │                │           │
-│  ┌────┴──────────────┴──────────────┴────────────────┴──────┐   │
-│  │              Supabase Client (JS SDK) + IndexedDB        │   │
-│  │              Analysis Cache (30 days TTL)                 │   │
-│  └──────────────────────────┬───────────────────────────────┘   │
-│                              │                                   │
-│  ┌──────────────────────────┴───────────────────────────────┐   │
-│  │                    Service Worker v2                       │   │
-│  │         stale-while-revalidate + offline fallback         │   │
-│  │              + background sync (PWA)                       │   │
-│  └──────────────────────────┬───────────────────────────────┘   │
-└─────────────────────────────┼───────────────────────────────────┘
-                              │ HTTPS
-┌─────────────────────────────┼───────────────────────────────────┐
-│                     BACKEND (Supabase)                          │
-│  ┌──────────────┐  ┌───────┴──┐  ┌──────────────┐             │
-│  │ PostgreSQL   │  │ Auth     │  │ Edge Functions│             │
-│  │ (datos)      │  │ (JWT)    │  │ (Deno)       │             │
-│  │ 10+ tables   │  │          │  │ chat + cache │             │
-│  └──────────────┘  └──────────┘  └──────────────┘             │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────┼───────────────────────────────────┐
-│                EXTERNAL APIs (5) + Groq + Supabase               │
-│  ┌──────────────┐  ┌───────┴──┐  ┌──────────────┐             │
-│  │ Open-Meteo   │  │ NASA     │  │ IDEAM        │             │
-│  │ (clima 90d)  │  │ POWER    │  │ (datos.gov)  │             │
-│  └──────────────┘  └──────────┘  └──────────────┘             │
-│  ┌──────────────┐  ┌───────┴──┐  ┌──────────────┐             │
-│  │ SoilGrids    │  │ Commodity│  │ Groq         │             │
-│  │ (6 depths)   │  │ Forecast │  │ (chatbot IA) │             │
-│  └──────────────┘  └──────────┘  └──────────────┘             │
-└─────────────────────────────────────────────────────────────────┘
-```
 
-## Flujo de Datos
+---
 
-1. **Ingesta:** Datos climáticos de Open-Meteo, NASA POWER e IDEAM se procesan y cachean en Supabase
-2. **Cache:** Los datos se almacenan en Supabase (24h-7d TTL) y IndexedDB (30d offline)
-3. **Consulta:** El frontend consulta Supabase vía JS SDK con filtros dinámicos
-4. **Predicción:** El motor de predicción v2 calcula viabilidad con 8 factores ponderados
-5. **Visualización:** React renderiza KPIs, mapa SVG, gráficos Recharts y radar
-6. **Conversación:** El chatbot genera respuestas con memoria, sinónimos y 50+ entradas
-7. **Exportación:** El usuario puede exportar a PDF (jsPDF) o Excel (SheetJS)
-8. **Compartir:** El análisis se comparte vía URL codificada o Web Share API
+## 2. Flujo de Datos y Trazabilidad
 
-## Seguridad
+1. **Selección Territorial:** El usuario selecciona un municipio de Santander en el mapa SVG. Se resuelven coordenadas oficiales, altitud y zona agroecológica desde la tabla `municipios`.
+2. **Ingesta Agroclimática en Vivo:**
+   - **Clima:** Open-Meteo provee temperatura actual, humedad, viento y acumulado de lluvia a 7 días.
+   - **Suelo:** SoilGrids ISRIC suministra pH en $H_2O$, materia orgánica y textura.
+   - **Satélite / Estaciones:** NASA POWER e IDEAM complementan radiación solar y observaciones históricas.
+3. **Cálculo de Viabilidad Bioclimática:** El motor del cliente evalúa la adecuación fisiológica de Café, Cacao o Granadilla frente a los umbrales institucionales de Cenicafé / Fedecacao / AGROSAVIA.
+4. **Histórico vs. Predicción:**
+   - **Observaciones Reales:** Se consultan los registros históricos de EVA / MinAgricultura en `rendimiento_historico`.
+   - **Motor Estadístico (Theil-Sen):** Si existen $N \ge 3$ observaciones reales, se calculan proyecciones estadísticas e intervalos de confianza al 80% y 95% ($L_{80}, U_{80}, L_{95}, U_{95}$). Si $N < 3$, el sistema declara explícitamente `status: "insufficient_data"` (**0 datos sintéticos**).
+   - **Evaluación Gemini:** La Edge Function `gemini-assessment` evalúa cualitativamente la consistencia biológica sin alterar los valores estadísticos.
+5. **Asistente Conversacional Trazable:**
+   - El usuario envía una consulta a `functions/v1/chat`.
+   - La función valida geográficamente el municipio en Supabase, extrae datos deterministas reales, aplica RAG técnico (umbral $\ge 3.0$) y solicita a Groq (`openai/gpt-oss-20b`) una respuesta estructurada en formato JSON Zod.
+   - El verificador server-side coteja cada afirmación numérica contra el conjunto de hechos reales y neutraliza cualquier dato inventado.
 
-- Variables de entorno para credenciales Supabase (nunca en código fuente)
-- Row Level Security (RLS) habilitado en todas las tablas
-- Autenticación JWT para accesos autenticados
-- Rate limiting en endpoints públicos
-- `GROQ_API_KEY` gestionada server-side en la Edge Function de Supabase (nunca expuesta al frontend)
-- Service Worker con cache seguro (stale-while-revalidate)
-- Focus trapping en modales para accesibilidad (WCAG 2.1)
+---
 
-## Componentes Clave
+## 3. Seguridad y Políticas RLS (Migración 009)
 
-### Code Splitting
+- **Frontend de Solo Lectura:** El cliente navegador no realiza escrituras directas ni borrados sobre tablas de caché o pronósticos.
+- **Acceso Restringido:** Las tablas `chat_conversations`, `predicciones_agroclimaticas` (escritura) y `data_quality_quarantine` tienen RLS restringido a `service_role` (utilizado exclusivamente por las Edge Functions).
+- **Lectura Pública:** Las tablas `municipios`, `cultivos`, `rendimiento_historico`, `crop_climate_requirements` y el `SELECT` de `predicciones_agroclimaticas` permiten lectura pública.
+- **Secretos:** `GROQ_API_KEY` y `GEMINI_API_KEY` se almacenan en el almacén de secretos de Supabase y nunca se transmiten al cliente web.
+- **CORS Estricto:** Validación dinámica de orígenes con rechazo **HTTP 403 Forbidden** para llamadas fuera de la allowlist.
 
-- Dashboard, ChatbotPanel, PredictionPanel se cargan bajo demanda (lazy)
-- Chunk principal de rutas: 1.3 KB (-99.8% vs 820 KB antes)
+---
 
-### Service Worker v2
+## 4. Política de Conectividad Obligatoria
 
-- Stale-while-revalidate: cache servido mientras se actualiza en background
-- Offline fallback: página offline.html funcional
-- Background sync para formularios
+SembraData es una plataforma **estrictamente conectada**:
 
-### Accesibilidad
-
-- Skip-to-content link
-- Focus trapping en modales (PredictionPanel, HistoryPanel)
-- Navegación por teclado en mapa SVG (flechas, Enter, Escape)
-- Regiones aria-live para actualizaciones dinámicas
-
-### ETL Pipeline
-
-- `data/etl/etl_ideam.ts`: Extracción de estaciones meteorológicas
-- `data/etl/etl_nasa_power.ts`: Datos satelitales + índices agroclimáticos
-- `data/etl/etl_commodities.ts`: Precios internacionales de commodities
+- Las predicciones, datos climáticos y recomendaciones exigen acceso en tiempo real a APIs y bases de datos actualizadas.
+- Se ha eliminado por completo el Service Worker de caché funcional y los respaldos en `localStorage` / `IndexedDB` que pudieran presentar información desactualizada como si fuera actual.
+- Un componente de red (`useNetworkStatus`) detecta desconexiones e informa al usuario con un banner de estado no intrusivo y opciones de reintento.

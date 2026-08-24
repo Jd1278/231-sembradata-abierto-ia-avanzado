@@ -1,13 +1,14 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { CropKey } from "@/types/crops";
 import {
-  fetchHistoricalAndPredictionSeries,
+  fetchHistoricalAndPredictionDetails,
   type ChartFilters,
+  type SeriesQueryResult,
   type HistoricalPredictionPoint,
 } from "@/services/historical-prediction-service";
-
 import type { MunicipalityClimateState } from "@/services/climate-state";
+import { AlertCircle, CheckCircle2, Sparkles } from "lucide-react";
 
 interface Props {
   crop: CropKey;
@@ -16,9 +17,9 @@ interface Props {
   climateState?: MunicipalityClimateState | null;
 }
 
-const W = 500;
-const H = 300;
-const PAD = { top: 22, right: 24, bottom: 40, left: 50 };
+const W = 520;
+const H = 310;
+const PAD = { top: 28, right: 26, bottom: 42, left: 52 };
 
 export const YieldChart = memo(function YieldChart({
   crop,
@@ -26,6 +27,8 @@ export const YieldChart = memo(function YieldChart({
   filters,
   climateState,
 }: Props) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
   const chartFilters: ChartFilters = useMemo(
     () => ({
       crop,
@@ -36,26 +39,42 @@ export const YieldChart = memo(function YieldChart({
   );
 
   const {
-    data = [],
+    data: seriesResult,
     isLoading,
     isError,
     error,
     refetch,
-  } = useQuery<HistoricalPredictionPoint[]>({
-    queryKey: ["historical-prediction-series", crop, municipio, filters, climateState?.computedAt],
-    queryFn: () => fetchHistoricalAndPredictionSeries(chartFilters, climateState),
+  } = useQuery<SeriesQueryResult>({
+    queryKey: ["historical-prediction-details", crop, municipio, filters, climateState?.computedAt],
+    queryFn: () => fetchHistoricalAndPredictionDetails(chartFilters, climateState),
     staleTime: 1000 * 60 * 15, // 15 minutes
     gcTime: 1000 * 60 * 60, // 1 hour
     enabled: Boolean(municipio && crop),
   });
 
+  const points: HistoricalPredictionPoint[] = useMemo(
+    () => seriesResult?.points ?? [],
+    [seriesResult],
+  );
+
   const values = useMemo(
     () =>
-      data
-        .flatMap((p) => [p.historicalValue, p.predictedValue, p.lowerBound, p.upperBound])
+      points
+        .flatMap((p) => [
+          p.historicalValue,
+          p.predictedValue,
+          p.lowerBound80,
+          p.upperBound80,
+          p.lowerBound95,
+          p.upperBound95,
+        ])
         .filter((v): v is number => v !== null && Number.isFinite(v)),
-    [data],
+    [points],
   );
+
+  const lastObservedYear = seriesResult?.lastObservedYear ?? null;
+  const isInsufficientData = seriesResult?.status === "insufficient_data";
+  const geminiAssessment = seriesResult?.geminiAssessment ?? null;
 
   if (isLoading) {
     return <div className="h-[260px] animate-pulse rounded-xl bg-muted/60" />;
@@ -78,235 +97,423 @@ export const YieldChart = memo(function YieldChart({
     );
   }
 
-  if (!data.length || !values.length) {
+  if (!points.length || !values.length) {
     return (
       <div className="grid h-[260px] place-items-center p-6 text-center text-xs leading-relaxed text-muted-foreground">
-        No se encontraron series de rendimiento histórico ni proyecciones almacenadas para{" "}
-        {municipio || "este municipio"} con los filtros seleccionados.
+        No se encontraron series de rendimiento histórico de EVA ni proyecciones para{" "}
+        <strong className="text-foreground">{municipio || "este municipio"}</strong>.
       </div>
     );
   }
 
   const rawMin = Math.min(...values);
   const rawMax = Math.max(...values);
-  const min = Math.max(0, Math.floor(rawMin * 0.85));
-  const max = Math.ceil(rawMax * 1.15) || min + 1;
+  const min = Math.max(0, Math.floor(rawMin * 0.8));
+  const max = Math.ceil(rawMax * 1.2) || min + 1;
 
   const pw = W - PAD.left - PAD.right;
   const ph = H - PAD.top - PAD.bottom;
 
-  const x = (i: number) => PAD.left + (i / Math.max(1, data.length - 1)) * pw;
+  const x = (i: number) => PAD.left + (i / Math.max(1, points.length - 1)) * pw;
   const y = (v: number) => PAD.top + ph - ((v - min) / Math.max(0.1, max - min)) * ph;
 
+  // Split historical vs prediction indices
+  const historicalPoints = points.filter((p) => p.dataType === "historical");
+  const predictionPoints = points.filter((p) => p.dataType === "prediction");
+
   // Build SVG path for historical observations
-  const buildLinePath = (type: "historical" | "prediction") => {
-    let started = false;
-    let pathStr = "";
+  let histPath = "";
+  let histStarted = false;
+  points.forEach((p, i) => {
+    if (p.dataType === "historical" && p.historicalValue !== null) {
+      histPath += `${histStarted ? "L" : "M"}${x(i)},${y(p.historicalValue)}`;
+      histStarted = true;
+    }
+  });
 
-    data.forEach((p, i) => {
-      const val = type === "historical" ? p.historicalValue : p.predictedValue;
-      if (val !== null && Number.isFinite(val)) {
-        pathStr += `${started ? "L" : "M"}${x(i)},${y(val)}`;
-        started = true;
+  // Build SVG path for statistical prediction (linking from last historical point if available)
+  let predPath = "";
+  let predStarted = false;
+
+  // Include last historical point as starting anchor for smooth visual transition
+  let lastHistIdx = -1;
+  for (let i = points.length - 1; i >= 0; i--) {
+    if (points[i].dataType === "historical") {
+      lastHistIdx = i;
+      break;
+    }
+  }
+
+  if (lastHistIdx !== -1 && predictionPoints.length > 0) {
+    const lastHist = points[lastHistIdx];
+    if (lastHist.historicalValue !== null) {
+      predPath += `M${x(lastHistIdx)},${y(lastHist.historicalValue)}`;
+      predStarted = true;
+    }
+  }
+
+  points.forEach((p, i) => {
+    if (p.dataType === "prediction" && p.predictedValue !== null) {
+      predPath += `${predStarted ? "L" : "M"}${x(i)},${y(p.predictedValue)}`;
+      predStarted = true;
+    }
+  });
+
+  // Build Confidence Polygon for 95% interval
+  const buildConfidenceArea = (level: 80 | 95) => {
+    const predCoords: { xVal: number; lowerVal: number; upperVal: number }[] = [];
+
+    // If we have an anchor from the last historical point
+    if (lastHistIdx !== -1 && predictionPoints.length > 0) {
+      const lastHist = points[lastHistIdx];
+      if (lastHist.historicalValue !== null) {
+        predCoords.push({
+          xVal: x(lastHistIdx),
+          lowerVal: y(lastHist.historicalValue),
+          upperVal: y(lastHist.historicalValue),
+        });
+      }
+    }
+
+    points.forEach((p, i) => {
+      if (p.dataType === "prediction") {
+        const lower =
+          level === 80 ? (p.lowerBound80 ?? p.lowerBound) : (p.lowerBound95 ?? p.lowerBound);
+        const upper =
+          level === 80 ? (p.upperBound80 ?? p.upperBound) : (p.upperBound95 ?? p.upperBound);
+        if (
+          typeof lower === "number" &&
+          typeof upper === "number" &&
+          Number.isFinite(lower) &&
+          Number.isFinite(upper)
+        ) {
+          predCoords.push({
+            xVal: x(i),
+            lowerVal: y(lower),
+            upperVal: y(upper),
+          });
+        }
       }
     });
 
-    return pathStr;
-  };
+    if (predCoords.length < 2) return "";
 
-  // Build confidence interval polygon for predictions
-  const buildConfidenceArea = () => {
-    const predPoints: { i: number; lower: number; upper: number }[] = [];
-    data.forEach((p, i) => {
-      if (
-        p.dataType === "prediction" &&
-        p.lowerBound !== null &&
-        p.upperBound !== null &&
-        Number.isFinite(p.lowerBound) &&
-        Number.isFinite(p.upperBound)
-      ) {
-        predPoints.push({ i, lower: p.lowerBound, upper: p.upperBound });
-      }
-    });
-
-    if (predPoints.length === 0) return "";
-
-    const topPath = predPoints
-      .map((p, idx) => `${idx === 0 ? "M" : "L"}${x(p.i)},${y(p.upper)}`)
+    const topPath = predCoords
+      .map((c, idx) => `${idx === 0 ? "M" : "L"}${c.xVal},${c.upperVal}`)
       .join(" ");
-    const bottomPath = predPoints
+    const bottomPath = predCoords
       .slice()
       .reverse()
-      .map((p) => `L${x(p.i)},${y(p.lower)}`)
+      .map((c) => `L${c.xVal},${c.lowerVal}`)
       .join(" ");
 
     return `${topPath} ${bottomPath} Z`;
   };
 
-  // Find index where historical data ends and prediction begins
-  const lastHistoricalIndex = data.reduce(
-    (lastIdx, p, idx) => (p.historicalValue !== null ? idx : lastIdx),
-    -1,
-  );
+  const area95Path = buildConfidenceArea(95);
+  const area80Path = buildConfidenceArea(80);
 
-  const confidenceAreaD = buildConfidenceArea();
-  const histPath = buildLinePath("historical");
-  const predPath = buildLinePath("prediction");
+  // Transition vertical line index
+  const transitionX = lastHistIdx !== -1 ? x(lastHistIdx) : null;
+  const hoveredPoint = hoveredIdx !== null ? points[hoveredIdx] : null;
 
   return (
-    <div
-      className="w-full"
-      role="img"
-      aria-label={`Rendimiento histórico observado y proyectado para ${municipio}`}
-    >
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full">
-        {/* Y-Axis Gridlines & Values */}
-        {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-          const value = min + (max - min) * ratio;
-          const yPos = y(value);
-          return (
-            <g key={ratio}>
+    <div className="space-y-3">
+      {/* Insufficient data notification banner */}
+      {isInsufficientData && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div>
+            <p className="font-semibold">Muestreo histórico insuficiente</p>
+            <p className="text-[11px] opacity-90">
+              {seriesResult?.insufficientDataReason ??
+                "Se requieren al menos 3 años de registros históricos oficiales de EVA para formular una proyección estadística reproducible."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Main SVG Chart */}
+      <div className="relative">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full overflow-visible"
+          role="img"
+          aria-label={`Gráfico de rendimiento histórico vs predicción para ${crop} en ${municipio}`}
+        >
+          {/* Y-axis gridlines & labels */}
+          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+            const v = min + ratio * (max - min);
+            const yPos = PAD.top + ph - ratio * ph;
+            return (
+              <g key={ratio}>
+                <line
+                  x1={PAD.left}
+                  y1={yPos}
+                  x2={W - PAD.right}
+                  y2={yPos}
+                  className="stroke-border/50"
+                  strokeDasharray="3 3"
+                  strokeWidth="0.8"
+                />
+                <text
+                  x={PAD.left - 8}
+                  y={yPos + 3.5}
+                  textAnchor="end"
+                  className="fill-muted-foreground text-[10px]"
+                >
+                  {v.toFixed(1)}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Dual Confidence Interval Shaded Polygons */}
+          {area95Path && (
+            <path
+              d={area95Path}
+              className="fill-primary/10 transition-opacity duration-200 dark:fill-primary/15"
+            />
+          )}
+          {area80Path && (
+            <path
+              d={area80Path}
+              className="fill-primary/20 transition-opacity duration-200 dark:fill-primary/25"
+            />
+          )}
+
+          {/* Historical Trend Line (Solid) */}
+          {histPath && (
+            <path
+              d={histPath}
+              fill="none"
+              className="stroke-primary"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
+          {/* Statistical Prediction Line (Dashed) */}
+          {predPath && (
+            <path
+              d={predPath}
+              fill="none"
+              className="stroke-primary"
+              strokeWidth="2.2"
+              strokeDasharray="5 4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
+          {/* Transition vertical line at last observed year */}
+          {transitionX !== null && predictionPoints.length > 0 && (
+            <g>
               <line
-                x1={PAD.left}
-                y1={yPos}
-                x2={W - PAD.right}
-                y2={yPos}
-                stroke="var(--border)"
-                strokeDasharray="3 3"
+                x1={transitionX}
+                y1={PAD.top}
+                x2={transitionX}
+                y2={PAD.top + ph}
+                className="stroke-muted-foreground/60"
                 strokeWidth="1"
+                strokeDasharray="2 2"
               />
               <text
-                x={PAD.left - 8}
-                y={yPos + 3.5}
-                textAnchor="end"
-                fontSize="10"
-                fill="var(--muted-foreground)"
-                className="select-none font-mono"
+                x={transitionX + 4}
+                y={PAD.top + 10}
+                className="fill-muted-foreground text-[9px] font-medium"
               >
-                {value.toFixed(1)}
+                Inicio Pronóstico ({lastObservedYear})
               </text>
             </g>
-          );
-        })}
+          )}
 
-        {/* Prediction Confidence Band */}
-        {confidenceAreaD && (
-          <path d={confidenceAreaD} fill="var(--sky)" fillOpacity="0.15" stroke="none" />
-        )}
+          {/* X-axis labels and points */}
+          {points.map((p, i) => {
+            const isHovered = hoveredIdx === i;
+            const xPos = x(i);
+            const isHist = p.dataType === "historical";
+            const val = isHist ? p.historicalValue : p.predictedValue;
+            if (val === null) return null;
+            const yPos = y(val);
 
-        {/* Transition Line Between Historical and Prediction */}
-        {lastHistoricalIndex >= 0 && lastHistoricalIndex < data.length - 1 && (
-          <g>
-            <line
-              x1={x(lastHistoricalIndex)}
-              y1={PAD.top}
-              x2={x(lastHistoricalIndex)}
-              y2={PAD.top + ph}
-              stroke="var(--muted-foreground)"
-              strokeDasharray="4 4"
-              strokeWidth="1.2"
-            />
-            <text
-              x={x(lastHistoricalIndex)}
-              y={PAD.top - 6}
-              textAnchor="middle"
-              fontSize="9"
-              fill="var(--muted-foreground)"
-              className="select-none font-medium"
-            >
-              Transición
-            </text>
-          </g>
-        )}
+            return (
+              <g key={p.date}>
+                {/* Year Label */}
+                <text
+                  x={xPos}
+                  y={PAD.top + ph + 16}
+                  textAnchor="middle"
+                  className={`text-[10px] transition-colors ${
+                    isHovered ? "fill-foreground font-bold" : "fill-muted-foreground"
+                  }`}
+                >
+                  {p.year}
+                </text>
 
-        {/* Observed / Historical Line */}
-        {histPath && (
-          <path
-            d={histPath}
-            fill="none"
-            stroke="var(--primary)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        )}
+                {/* Point Marker */}
+                {isHist ? (
+                  // Historical Observation (Solid Circle)
+                  <circle
+                    cx={xPos}
+                    cy={yPos}
+                    r={isHovered ? 5.5 : 4}
+                    className="cursor-pointer fill-primary stroke-background transition-all"
+                    strokeWidth={isHovered ? 2 : 1.5}
+                    onMouseEnter={() => setHoveredIdx(i)}
+                    onMouseLeave={() => setHoveredIdx(null)}
+                  />
+                ) : (
+                  // Statistical Prediction (Rhombus / Diamond)
+                  <rect
+                    x={xPos - (isHovered ? 5 : 3.8)}
+                    y={yPos - (isHovered ? 5 : 3.8)}
+                    width={isHovered ? 10 : 7.6}
+                    height={isHovered ? 10 : 7.6}
+                    transform={`rotate(45 ${xPos} ${yPos})`}
+                    className="cursor-pointer fill-background stroke-primary transition-all"
+                    strokeWidth={isHovered ? 2.2 : 1.8}
+                    onMouseEnter={() => setHoveredIdx(i)}
+                    onMouseLeave={() => setHoveredIdx(null)}
+                  />
+                )}
+              </g>
+            );
+          })}
+        </svg>
 
-        {/* Predicted / Forecast Line */}
-        {predPath && (
-          <path
-            d={predPath}
-            fill="none"
-            stroke="var(--sky)"
-            strokeWidth="2.5"
-            strokeDasharray="5 4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        )}
-
-        {/* Data Point Nodes */}
-        {data.map((p, i) => {
-          const val = p.historicalValue ?? p.predictedValue;
-          if (val === null || !Number.isFinite(val)) return null;
-          const isPred = p.dataType === "prediction";
-          return (
-            <circle
-              key={`${p.year}-${i}`}
-              cx={x(i)}
-              cy={y(val)}
-              r={isPred ? "3.5" : "4"}
-              fill={isPred ? "var(--sky)" : "var(--primary)"}
-              stroke="var(--background)"
-              strokeWidth="1.5"
-            />
-          );
-        })}
-
-        {/* X-Axis Labels */}
-        {data.map((p, i) => (
-          <text
-            key={p.year}
-            x={x(i)}
-            y={H - 12}
-            textAnchor="middle"
-            fontSize="10"
-            fill="var(--muted-foreground)"
-            className="select-none font-medium"
+        {/* Hover Floating Tooltip */}
+        {hoveredPoint !== null && hoveredIdx !== null && (
+          <div
+            className="pointer-events-none absolute -top-2 z-20 w-64 rounded-xl border border-border/80 bg-background/95 p-2.5 text-xs shadow-lg backdrop-blur"
+            style={{
+              left: `${Math.min(Math.max(10, (hoveredIdx / Math.max(1, points.length - 1)) * 100), 65)}%`,
+            }}
           >
-            {p.year}
-          </text>
-        ))}
+            <div className="flex items-center justify-between border-b border-border/60 pb-1.5 font-semibold">
+              <span>Año {hoveredPoint.year}</span>
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+                  hoveredPoint.dataType === "historical"
+                    ? "bg-primary/15 text-primary"
+                    : "bg-chart-2/20 text-foreground"
+                }`}
+              >
+                {hoveredPoint.dataType === "historical"
+                  ? "Histórico Observado"
+                  : "Predicción Estadística"}
+              </span>
+            </div>
 
-        {/* Unit label */}
-        <text
-          x={PAD.left}
-          y={PAD.top - 6}
-          textAnchor="start"
-          fontSize="9"
-          fill="var(--muted-foreground)"
-          className="select-none"
-        >
-          Ton/Ha
-        </text>
-      </svg>
+            <div className="mt-1.5 space-y-1 text-[11px]">
+              <p className="flex justify-between">
+                <span className="text-muted-foreground">Rendimiento:</span>
+                <strong className="font-semibold text-foreground">
+                  {(hoveredPoint.historicalValue ?? hoveredPoint.predictedValue)?.toFixed(2)} Ton/Ha
+                </strong>
+              </p>
 
-      {/* Chart Legend */}
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <i className="inline-block h-2 w-3.5 rounded bg-primary" />
-          Histórico Observado (EVA)
-        </span>
-        <span className="flex items-center gap-1.5">
-          <i className="inline-block h-2 w-3.5 rounded border border-dashed border-sky bg-sky/30" />
-          Predicción Agroclimática
-        </span>
-        {confidenceAreaD && (
-          <span className="flex items-center gap-1.5">
-            <i className="inline-block h-2 w-3.5 rounded bg-sky/20" />
-            Intervalo de Confianza (±10%)
-          </span>
+              {hoveredPoint.dataType === "prediction" && (
+                <>
+                  <p className="flex justify-between text-[10px]">
+                    <span className="text-muted-foreground">Intervalo 80%:</span>
+                    <span>
+                      [{hoveredPoint.lowerBound80?.toFixed(2)} -{" "}
+                      {hoveredPoint.upperBound80?.toFixed(2)}] Ton/Ha
+                    </span>
+                  </p>
+                  <p className="flex justify-between text-[10px]">
+                    <span className="text-muted-foreground">Intervalo 95%:</span>
+                    <span>
+                      [{hoveredPoint.lowerBound95?.toFixed(2)} -{" "}
+                      {hoveredPoint.upperBound95?.toFixed(2)}] Ton/Ha
+                    </span>
+                  </p>
+                  {hoveredPoint.modelName && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Modelo: <span className="text-foreground">{hoveredPoint.modelName}</span>
+                    </p>
+                  )}
+                  {hoveredPoint.validationMetrics && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Error sMAPE: {hoveredPoint.validationMetrics.smape}% · RMSE:{" "}
+                      {hoveredPoint.validationMetrics.rmse}
+                    </p>
+                  )}
+                </>
+              )}
+
+              <p className="text-[10px] text-muted-foreground pt-0.5 border-t border-border/40">
+                Fuente: {hoveredPoint.source}
+              </p>
+            </div>
+          </div>
         )}
       </div>
+
+      {/* Chart Legend & Methodological Note */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/50 pt-2 text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-primary" />
+            <span>Histórico EVA ({historicalPoints.length} años)</span>
+          </div>
+          {predictionPoints.length > 0 && (
+            <>
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rotate-45 border border-primary bg-background" />
+                <span>Predicción Estadística</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-2.5 w-4 rounded bg-primary/20" />
+                <span>Intervalo 80% / 95%</span>
+              </div>
+            </>
+          )}
+        </div>
+        <span className="text-[10px]">Unidad: Toneladas / Hectárea</span>
+      </div>
+
+      {/* Gemini Agronomic Assessment Card */}
+      {geminiAssessment && (
+        <div className="rounded-xl border border-border/80 bg-muted/30 p-3 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 font-semibold text-foreground">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <span>Evaluación Agronómica IA (Gemini)</span>
+            </div>
+            <div className="flex items-center gap-1">
+              {geminiAssessment.consistencyStatus === "valid" ? (
+                <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle2 className="h-3 w-3" /> Coherente
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                  <AlertCircle className="h-3 w-3" /> Revisión sugerida
+                </span>
+              )}
+            </div>
+          </div>
+
+          <p className="mt-1.5 text-muted-foreground leading-relaxed">
+            {geminiAssessment.explanation}
+          </p>
+
+          {geminiAssessment.riskFactors.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {geminiAssessment.riskFactors.map((rf, idx) => (
+                <span
+                  key={idx}
+                  className="rounded-md bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground border border-border/60"
+                >
+                  ⚠ {rf}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 });

@@ -1,4 +1,6 @@
-# Plan de Optimización — Fases 3 a 7
+# Plan de Corrección y Optimización — Fases 3 a 7
+
+> **Registro Histórico de Optimización:** Este documento registra las tareas de optimización ejecutadas durante el ciclo de desarrollo intermedio. El estado definitivo de la arquitectura y la infraestructura está consolidado en el `README.md` y `docs/architecture/`.
 
 **Objetivo:** Optimización profunda de IA, UI, robustez y rendimiento.
 **Fecha:** 2026-08-18

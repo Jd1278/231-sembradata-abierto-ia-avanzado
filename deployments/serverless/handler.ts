@@ -1,8 +1,8 @@
 /**
- * Serverless Handler - Funciones lambda para reportes automatizados
+ * Serverless Handler - Endpoints de reportes y notificaciones
  *
- * Endpoints serverless para generacion de reportes, notificaciones
- * y procesamiento de datos en background.
+ * Los endpoints en esta capa retornan HTTP 501 Not Implemented
+ * para evitar respuestas simuladas sin operaciones reales persistidas.
  */
 
 interface ServerlessEvent {
@@ -18,76 +18,84 @@ interface ServerlessResponse {
   headers?: Record<string, string>;
 }
 
-export async function handler(event: ServerlessEvent): Promise<ServerlessResponse> {
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+const ALLOWED_ORIGINS = [
+  "https://231-sembradata-abierto-ia-avanzado.vercel.app",
+  "https://lovable.dev",
+];
+
+const ALLOWED_ORIGIN_PATTERNS = [
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
+  /^https:\/\/(231-)?[a-z0-9-]+-jd1278s-projects\.vercel\.app$/,
+  /^https:\/\/(231-)?sembradata-abierto-ia-avanzado.*\.vercel\.app$/,
+];
+
+function isOriginAllowed(origin?: string): boolean {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  return ALLOWED_ORIGIN_PATTERNS.some((p) => p.test(origin));
+}
+
+function getCorsHeaders(origin?: string): Record<string, string> {
+  if (!origin || !isOriginAllowed(origin)) {
+    return { Vary: "Origin" };
+  }
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-request-id",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    Vary: "Origin",
   };
+}
+
+export async function handler(event: ServerlessEvent): Promise<ServerlessResponse> {
+  const origin = event.headers?.origin || event.headers?.Origin;
+  const corsHeaders = getCorsHeaders(origin);
 
   if (event.method === "OPTIONS") {
-    return { statusCode: 200, body: "", headers: corsHeaders };
+    if (origin && !isOriginAllowed(origin)) {
+      return {
+        statusCode: 403,
+        body: JSON.stringify({ error: "Forbidden: Origin not allowed", code: "CORS_FORBIDDEN" }),
+        headers: { "Content-Type": "application/json", Vary: "Origin" },
+      };
+    }
+    return { statusCode: 204, body: "", headers: corsHeaders };
   }
 
-  try {
-    switch (event.path) {
-      case "/api/reports/generate":
-        return await handleReportGeneration(event, corsHeaders);
-      case "/api/reports/schedule":
-        return await handleReportSchedule(event, corsHeaders);
-      case "/api/notifications/send":
-        return await handleNotificationSend(event, corsHeaders);
-      default:
-        return {
-          statusCode: 404,
-          body: JSON.stringify({ error: "Not found" }),
-          headers: corsHeaders,
-        };
-    }
-  } catch {
+  if (origin && !isOriginAllowed(origin)) {
     return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Internal server error" }),
-      headers: corsHeaders,
+      statusCode: 403,
+      body: JSON.stringify({ error: "Forbidden: Origin not allowed", code: "CORS_FORBIDDEN" }),
+      headers: { "Content-Type": "application/json", Vary: "Origin" },
     };
   }
-}
 
-async function handleReportGeneration(
-  event: ServerlessEvent,
-  headers: Record<string, string>,
-): Promise<ServerlessResponse> {
-  const _body = event.body ? JSON.parse(event.body) : {};
+  switch (event.path) {
+    case "/api/reports/generate":
+    case "/api/reports/schedule":
+    case "/api/notifications/send":
+      return {
+        statusCode: 501,
+        body: JSON.stringify({
+          error:
+            "Endpoint no implementado en capa serverless. Operación disponible exclusivamente vía Supabase Backend / Edge Functions autenticadas.",
+          code: "NOT_IMPLEMENTED",
+          path: event.path,
+        }),
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      };
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify({
-      reportId: `report-${Date.now()}`,
-      status: "generating",
-      estimatedTime: "30s",
-    }),
-    headers,
-  };
-}
-
-async function handleReportSchedule(
-  event: ServerlessEvent,
-  headers: Record<string, string>,
-): Promise<ServerlessResponse> {
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ scheduled: true, nextRun: new Date().toISOString() }),
-    headers,
-  };
-}
-
-async function handleNotificationSend(
-  event: ServerlessEvent,
-  headers: Record<string, string>,
-): Promise<ServerlessResponse> {
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ sent: true }),
-    headers,
-  };
+    default:
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ error: "Ruta no encontrada", code: "NOT_FOUND" }),
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      };
+  }
 }
