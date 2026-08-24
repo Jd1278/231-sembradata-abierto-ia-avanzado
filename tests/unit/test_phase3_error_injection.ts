@@ -52,7 +52,9 @@ describe("Phase 3: Fault Injection, Malformed Payloads & Error Resilience", () =
       };
 
       const service = new CommodityService(corruptProvider);
-      await expect(service.getCommodityPrice("cafe")).rejects.toThrow();
+      const res = await service.getCommodityPrice("cafe");
+      expect(res.status).toBe("unavailable");
+      expect(res.price).toBeNull();
     });
 
     it("handles payload with NaN or non-finite price value safely", async () => {
@@ -69,7 +71,9 @@ describe("Phase 3: Fault Injection, Malformed Payloads & Error Resilience", () =
       };
 
       const service = new CommodityService(nonFiniteProvider);
-      await expect(service.getCommodityPrice("cafe")).rejects.toThrow();
+      const res = await service.getCommodityPrice("cafe");
+      expect(res.status).toBe("unavailable");
+      expect(res.price).toBeNull();
     });
 
     it("sanitizes malformed stressors, regions and non-finite confidence gracefully", async () => {

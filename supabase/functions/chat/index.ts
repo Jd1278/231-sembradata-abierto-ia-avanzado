@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyIntent, buildSystemPrompt, type Intent } from "./shared.ts";
 import { searchKnowledgeBase, formatRagContext } from "./rag.ts";
 import { saveMessage, getHistory, formatHistoryForLLM } from "./memory.ts";
-import { extractEntities } from "./entities.ts";
+import { extractEntities, type SelectedContextInput } from "./entities.ts";
 import {
   getMunicipalityProfile,
   getObservedYield,
@@ -33,6 +33,7 @@ const supabase =
 interface ChatRequest {
   message: string;
   sessionId?: string;
+  selectedContext?: SelectedContextInput | null;
 }
 
 export type ChatProvider = "groq" | "rag_fallback" | "static";
@@ -46,7 +47,8 @@ export type ChatErrorCode =
   | "INTERNAL_ERROR"
   | "CORS_FORBIDDEN"
   | "INVALID_REQUEST"
-  | "UNVERIFIED_LOCATION";
+  | "UNVERIFIED_LOCATION"
+  | "OUT_OF_SCOPE_LOCATION";
 
 export interface ChatResponsePayload extends ChatbotResponse {
   reply: string;
@@ -62,6 +64,9 @@ export interface ChatResponsePayload extends ChatbotResponse {
     lat: number | null;
     lon: number | null;
     sources: string[];
+    sourceOfMunicipality?: "message" | "selected_context";
+    sourceOfCrop?: "message" | "selected_context";
+    conflictDetected?: boolean;
   } | null;
 }
 
@@ -99,51 +104,47 @@ export function isOriginAllowed(origin: string | null): boolean {
   return ALLOWED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin));
 }
 
-export function getCorsHeaders(origin: string | null): HeadersInit {
-  if (!origin || !isOriginAllowed(origin)) {
-    return { Vary: "Origin" };
-  }
+export function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowOrigin = origin && isOriginAllowed(origin) ? origin : DEFAULT_ALLOWED_ORIGINS[0];
   return {
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type, x-request-id",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };
 }
 
 function jsonResponse(body: Record<string, unknown>, status = 200, origin: string | null = null) {
-  const cors = getCorsHeaders(origin);
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       "Content-Type": "application/json",
-      ...cors,
+      ...getCorsHeaders(origin),
     },
   });
 }
 
 // ------------------------------------------------------------
-// Invocación a Groq con JSON Mode y Control de Errores
+// Llamada a Groq Cloud con JSON Schema
 // ------------------------------------------------------------
-interface LLMCallResult {
+async function askLLMStructured(
+  systemPrompt: string,
+  history: { role: "user" | "assistant"; content: string }[],
+  userMessage: string,
+  timeoutMs = 12000,
+): Promise<{
   data: ChatbotResponse | null;
   provider: ChatProvider;
   degraded: boolean;
   errorCode?: ChatErrorCode;
   latencyMs: number;
-}
-
-async function askLLMStructured(
-  systemPrompt: string,
-  history: { role: string; content: string }[],
-  userMessage: string,
-  timeoutMs = 12000,
-): Promise<LLMCallResult> {
+}> {
   const start = Date.now();
 
   if (!GROQ_KEY) {
+    console.warn("[Groq Warning] GROQ_API_KEY no configurada. Activando fallback determinista.");
     return {
       data: null,
       provider: "rag_fallback",
@@ -153,13 +154,13 @@ async function askLLMStructured(
     };
   }
 
-  const messages = [
-    { role: "system", content: systemPrompt },
-    ...history.slice(-6),
-    { role: "user", content: userMessage },
-  ];
-
   try {
+    const messages = [
+      { role: "system", content: systemPrompt },
+      ...history.slice(-4),
+      { role: "user", content: userMessage },
+    ];
+
     const res = await fetchWithTimeout(
       "https://api.groq.com/openai/v1/chat/completions",
       timeoutMs,
@@ -172,7 +173,7 @@ async function askLLMStructured(
         body: JSON.stringify({
           model: "openai/gpt-oss-20b",
           messages,
-          temperature: 0.2, // Low temperature for high factual consistency
+          temperature: 0.1,
           max_tokens: 1000,
           response_format: { type: "json_object" },
         }),
@@ -276,7 +277,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { message, sessionId }: ChatRequest = await req.json();
+    const { message, sessionId, selectedContext }: ChatRequest = await req.json();
     if (!message || typeof message !== "string" || message.length > 2000) {
       return jsonResponse(
         {
@@ -290,29 +291,28 @@ Deno.serve(async (req) => {
     }
     const sid = sessionId || crypto.randomUUID();
 
-    // 1. Recuperar historial previo antes de registrar el turno actual para evitar duplicaciones
+    // 1. Recuperar historial previo antes de registrar el turno actual
     const history = await getHistory(sid, 6).catch(() => []);
     saveMessage(sid, { role: "user", content: message }).catch(() => {});
 
     const intent: Intent = classifyIntent(message);
 
-    // 3. Saludo Estático Verificable
+    // 2. Control de Saludo
     if (intent === "GREETING") {
       const reply =
-        "¡Hola! 👋 Soy el asistente agroclimático oficial de SembraData para Santander.\n\nPuedo ayudarte con datos verificados de:\n- 🌱 **Recomendación de cultivos** (Café, Cacao, Granadilla) según clima y suelo.\n- 📊 **Rendimientos históricos** observados por MinAgricultura / EVA.\n- 🔮 **Predicciones agroclimáticas** y evaluación de riesgos.\n\n¿En qué municipio o cultivo deseas asesoría hoy?";
+        "¡Hola! 👋 Soy el asistente agroclimático oficial de SembraData para Santander.\n\nPuedo ayudarte con datos verificados de:\n- 🌱 **Recomendación de cultivos** (Café, Cacao, Granadilla) según clima y suelo.\n- 📊 **Rendimientos históricos** observados por MinAgricultura / EVA.\n- 🔮 **Predicciones agroclimáticas** Theil-Sen con intervalos de confianza.\n- 💰 **Cotizaciones y mercado** internacional.\n\n¿En qué municipio o cultivo deseas asesoría?";
 
       saveMessage(sid, { role: "assistant", content: reply, metadata: { intent } }).catch(() => {});
 
       const payload: ChatResponsePayload = {
         answer: reply,
         reply,
-        summary: "Bienvenida y menú de opciones de consulta agroclimática de Santander.",
+        summary: "Bienvenida y opciones de consulta agroclimática de Santander.",
         claims: [],
         recommendations: [
           {
-            action:
-              "Selecciona o escribe el nombre de un municipio de Santander para obtener datos agroclimáticos reales.",
-            basis: ["Catálogo oficial de 87 municipios de Santander"],
+            action: "Escribe tu consulta o selecciona un municipio en pantalla.",
+            basis: ["Catálogo de 87 municipios de Santander"],
             priority: "medium",
           },
         ],
@@ -330,38 +330,108 @@ Deno.serve(async (req) => {
       return jsonResponse(payload as unknown as Record<string, unknown>, 200, origin);
     }
 
-    const entities = extractEntities(message);
-    const rawMunicipio = entities.municipio;
-    const rawCultivo = entities.cultivo?.toLowerCase();
+    // 3. Extracción de Entidades con Prioridad (Mensaje > selectedContext)
+    const entities = extractEntities(message, selectedContext);
 
-    // 4. Validación Geográfica contra Catálogo Maestro de Supabase
-    let muniProfile: MunicipalityProfile | null = null;
-    if (rawMunicipio && supabase) {
-      muniProfile = await getMunicipalityProfile(rawMunicipio, supabase);
-    }
-
-    // Si el usuario mencionó un lugar pero no pertenece a Santander
-    if (rawMunicipio && !muniProfile) {
-      const reply = `📍 El municipio **"${rawMunicipio}"** no se encuentra en el catálogo oficial de Santander o el nombre es ambiguo. SembraData cubre los **87 municipios de Santander** (ejemplos: *San Gil, Bucaramanga, Socorro, Rionegro, Landázuri, Vélez*).`;
+    // Si el usuario preguntó explícitamente por una ubicación fuera de Santander
+    if (entities.outOfScopeLocation) {
+      const reply = `📍 La ubicación **"${entities.outOfScopeLocation}"** se encuentra fuera de la cobertura de SembraData. Nuestra plataforma está especializada exclusivamente en los **87 municipios del departamento de Santander, Colombia** (ejemplos: *San Gil, San Vicente de Chucurí, Bucaramanga, Socorro, Rionegro, Landázuri, Vélez*).\n\n¿Deseas consultar información para algún municipio santandereano?`;
 
       saveMessage(sid, { role: "assistant", content: reply, metadata: { intent } }).catch(() => {});
 
       const payload: ChatResponsePayload = {
         answer: reply,
         reply,
-        summary: "Ubicación no reconocida dentro del departamento de Santander.",
+        summary: `Consulta fuera de Santander (${entities.outOfScopeLocation}).`,
         claims: [],
         recommendations: [
           {
-            action:
-              "Por favor especifica un municipio válido perteneciente al departamento de Santander.",
+            action: "Selecciona un municipio perteneciente a Santander.",
             basis: ["División político-administrativa de Santander (87 municipios)"],
             priority: "high",
           },
         ],
         uncertainties: [
-          `No se encontraron registros oficiales para "${rawMunicipio}" en Santander.`,
+          `No se dispone de datos agroclimáticos validados para ${entities.outOfScopeLocation}.`,
         ],
+        insufficientData: true,
+        needsHumanReview: false,
+        intent,
+        provider: "static",
+        degraded: false,
+        errorCode: "OUT_OF_SCOPE_LOCATION",
+        requestId,
+        latencyMs: Date.now() - overallStart,
+        data: null,
+      };
+
+      return jsonResponse(payload as unknown as Record<string, unknown>, 200, origin);
+    }
+
+    // 4. Consulta de Lista de Municipios
+    if (intent === "MUNICIPALITY_LIST") {
+      const reply =
+        "🗺️ **Cobertura de SembraData en Santander:**\n\nCubrimos los **87 municipios del departamento**, agrupados en provincias agroclimáticas:\n- **Provincia de Guanentá:** San Gil, Barichara, Curití, Aratoca, Villanueva, Pinchote, etc.\n- **Provincia Comunera:** Socorro, Palmas del Socorro, Simacota, Confines, Oiba, Suaita, etc.\n- **Provincia de Mares:** Barrancabermeja, San Vicente de Chucurí, El Carmen de Chucurí, Puerto Wilches, Betulia.\n- **Provincia de Soto:** Bucaramanga, Floridablanca, Girón, Piedecuesta, Lebrija, Rionegro, El Playón, Tona, Vetas.\n- **Provincia de Vélez:** Vélez, Barbosa, Puente Nacional, Landázuri, Bolívar, Chipatá, Güepsa.\n- **Provincias de García Rovira y Yariguíes.**";
+
+      saveMessage(sid, { role: "assistant", content: reply, metadata: { intent } }).catch(() => {});
+
+      const payload: ChatResponsePayload = {
+        answer: reply,
+        reply,
+        summary: "Catálogo de los 87 municipios de Santander.",
+        claims: [
+          {
+            text: "SembraData cubre los 87 municipios del departamento de Santander",
+            claimType: "observed",
+            source: "DANE / Gobernación de Santander",
+            value: 87,
+            unit: "municipios",
+            confidence: 100,
+          },
+        ],
+        recommendations: [],
+        uncertainties: [],
+        insufficientData: false,
+        needsHumanReview: false,
+        intent,
+        provider: "static",
+        degraded: false,
+        requestId,
+        latencyMs: Date.now() - overallStart,
+        data: null,
+      };
+
+      return jsonResponse(payload as unknown as Record<string, unknown>, 200, origin);
+    }
+
+    const rawMunicipio = entities.municipio;
+    const rawCultivo = entities.cultivo?.toLowerCase();
+
+    // 5. Validación Geográfica en Base de Datos de Supabase
+    let muniProfile: MunicipalityProfile | null = null;
+    if (rawMunicipio && supabase) {
+      muniProfile = await getMunicipalityProfile(rawMunicipio, supabase);
+    }
+
+    // Si el usuario indicó un municipio pero no se pudo validar
+    if (rawMunicipio && !muniProfile) {
+      const reply = `📍 El municipio **"${rawMunicipio}"** no pudo ser validado en el catálogo oficial de Santander. Por favor verifica la ortografía (ejemplos: *San Gil, Bucaramanga, Socorro, Rionegro, Landázuri, Vélez*).`;
+
+      saveMessage(sid, { role: "assistant", content: reply, metadata: { intent } }).catch(() => {});
+
+      const payload: ChatResponsePayload = {
+        answer: reply,
+        reply,
+        summary: "Municipio no reconocido en Santander.",
+        claims: [],
+        recommendations: [
+          {
+            action: "Especifica un municipio válido de Santander.",
+            basis: ["Catálogo de 87 municipios de Santander"],
+            priority: "high",
+          },
+        ],
+        uncertainties: [`No se encontraron registros para "${rawMunicipio}" en Santander.`],
         insufficientData: true,
         needsHumanReview: false,
         intent,
@@ -376,34 +446,7 @@ Deno.serve(async (req) => {
       return jsonResponse(payload as unknown as Record<string, unknown>, 200, origin);
     }
 
-    // Si no se indicó municipio en consultas que lo requieren
-    if (!muniProfile && intent !== "GENERAL" && intent !== "UNKNOWN") {
-      const reply =
-        '🤔 Para entregarte un análisis agroclimático trazable necesito saber el **municipio de Santander**. Ejemplo: *"¿Qué cultivo es viable en **San Gil**?"* o *"¿Cuál es el rendimiento de cacao en **Rionegro**?"*';
-
-      saveMessage(sid, { role: "assistant", content: reply, metadata: { intent } }).catch(() => {});
-
-      const payload: ChatResponsePayload = {
-        answer: reply,
-        reply,
-        summary: "Solicitud de municipio para contextualizar el análisis agroclimático.",
-        claims: [],
-        recommendations: [],
-        uncertainties: ["Falta especificar el municipio de Santander."],
-        insufficientData: true,
-        needsHumanReview: false,
-        intent,
-        provider: "static",
-        degraded: false,
-        requestId,
-        latencyMs: Date.now() - overallStart,
-        data: null,
-      };
-
-      return jsonResponse(payload as unknown as Record<string, unknown>, 200, origin);
-    }
-
-    // 5. Consulta Concurrente a Servicios Deterministas
+    // 6. Consultas Concurrentes a Servicios Deterministas
     const lat = muniProfile ? muniProfile.latitud : 7.12;
     const lon = muniProfile ? muniProfile.longitud : -73.12;
 
@@ -448,10 +491,10 @@ Deno.serve(async (req) => {
     if (externalContext.climate.status === "available") sources.push("Open-Meteo");
     if (externalContext.soil.status === "available") sources.push("SoilGrids ISRIC");
     if (historicalYield) sources.push("EVA / MinAgricultura");
-    if (prediction) sources.push("Modelo Estadístico SembraData");
+    if (prediction) sources.push("Modelo Estadístico Theil-Sen");
     if (cropReqs) sources.push(cropReqs.source);
 
-    // 6. Extracción de Números Verificados para Anti-Alucinación
+    // 7. Extracción de Números Verificados para Anti-Alucinación
     const { verifiedNumbers, verifiedFacts } = extractVerifiedNumbers({
       municipality: muniProfile,
       historicalYield,
@@ -473,7 +516,7 @@ Deno.serve(async (req) => {
       verifiedFacts,
     };
 
-    // 7. Construcción de Prompt Estricto y Llamada a Groq con JSON Mode
+    // 8. Construcción de Prompt Estricto y Llamada a Groq con JSON Mode
     const systemPrompt = buildSystemPrompt(intent, deterministicContext, ragContext);
     const llmHistory = formatHistoryForLLM(history);
 
@@ -482,10 +525,10 @@ Deno.serve(async (req) => {
     let finalResponse: ChatbotResponse;
 
     if (llmResult.data && !llmResult.degraded) {
-      // 8. Validación y Sanitización Profunda de Afirmaciones Cuantitativas contra Hechos Reales
+      // Validación y Sanitización Profunda de Afirmaciones Cuantitativas contra Hechos Reales
       finalResponse = verifyAndSanitizeResponse(llmResult.data, verifiedNumbers);
     } else {
-      // 9. Modo Degradado Determinista (Fallback Seguro)
+      // Modo Degradado Determinista (Fallback Seguro)
       const fallbackClaims: Claim[] = [];
       if (externalContext.climate.currentTempC !== null) {
         fallbackClaims.push({
@@ -509,8 +552,8 @@ Deno.serve(async (req) => {
 
       const ragAnswer = ragResults[0]?.entry.answer;
       const fallbackText = ragAnswer
-        ? `⚠️ **Modo Asistido (RAG):** Debido a alta demanda del motor de IA, te presentamos la información técnica disponible:\n\n${ragAnswer}`
-        : `⚠️ **Información agroclimática disponible:** Se registraron datos para ${muniProfile?.nombre || "el municipio"}. Temperatura: ${externalContext.climate.currentTempC ?? "N/A"}°C, Humedad: ${externalContext.climate.humidityPct ?? "N/A"}%.`;
+        ? `⚠️ **Modo Asistido (RAG):** Te presentamos la información técnica disponible:\n\n${ragAnswer}`
+        : `⚠️ **Información agroclimática:** Datos registrados para ${muniProfile?.nombre || "el municipio"}. Temperatura: ${externalContext.climate.currentTempC ?? "N/A"}°C, Humedad: ${externalContext.climate.humidityPct ?? "N/A"}%.`;
 
       finalResponse = {
         answer: fallbackText,
@@ -553,6 +596,9 @@ Deno.serve(async (req) => {
         lat: muniProfile ? muniProfile.latitud : null,
         lon: muniProfile ? muniProfile.longitud : null,
         sources,
+        sourceOfMunicipality: entities.sourceOfMunicipality,
+        sourceOfCrop: entities.sourceOfCrop,
+        conflictDetected: entities.conflictDetected,
       },
     };
 

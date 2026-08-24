@@ -43,7 +43,7 @@ describe.skipIf(!hasSupabase)("E2E: Chatbot Edge Function", () => {
   it("responds to risk query", async () => {
     const { status, body } = await chat("Cuales son los riesgos del cacao");
     expect(status).toBe(200);
-    expect(["CROP_RISK_ANALYSIS", "UNKNOWN"]).toContain(body.intent);
+    expect(["CROP_RISK_ANALYSIS", "RISK_ANALYSIS", "UNKNOWN"]).toContain(body.intent);
   }, 30000);
 
   it("returns data sources when location is detected", async () => {

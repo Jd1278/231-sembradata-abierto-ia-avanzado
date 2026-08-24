@@ -136,32 +136,41 @@ function normalize(text: string): string {
 
 export function getSuggestions(crop?: string, municipio?: string): string[] {
   const suggestions: string[] = [];
+  const muniText = municipio ? municipio.trim() : null;
 
+  let cropDisplay = "café";
   if (crop) {
     const cropLower = normalize(crop);
-    if (cropLower.includes("cacao")) {
-      suggestions.push("¿Cuándo sembrar cacao?");
-      suggestions.push("¿Qué enfermedades afectan al cacao?");
-      suggestions.push("¿Qué rendimiento histórico se ha obtenido?");
-    } else if (cropLower.includes("cafe") || cropLower.includes("café")) {
-      suggestions.push("¿Cuándo sembrar café?");
-      suggestions.push("¿Qué plagas afectan al café?");
-      suggestions.push("¿A qué altitud crece mejor?");
-    } else if (cropLower.includes("granadilla")) {
-      suggestions.push("¿Cuándo sembrar granadilla?");
-      suggestions.push("¿Cómo cuidar la granadilla?");
-      suggestions.push("¿Qué clima necesita?");
-    }
+    if (cropLower.includes("cacao")) cropDisplay = "cacao";
+    else if (cropLower.includes("granadilla")) cropDisplay = "granadilla";
+    else cropDisplay = "café";
   }
 
-  if (municipio) {
-    suggestions.push(`¿Qué cultivo es viable en ${municipio}?`);
-    suggestions.push(`¿Cómo está el clima actual en ${municipio}?`);
+  if (muniText && crop) {
+    suggestions.push(`¿Cuándo sembrar ${cropDisplay} en ${muniText}?`);
+    suggestions.push(`¿Qué rendimiento histórico de ${cropDisplay} existe en ${muniText}?`);
+    suggestions.push(`¿Cuál es la predicción estadística de ${cropDisplay} en ${muniText}?`);
+    suggestions.push(`¿Cómo está el clima actual en ${muniText}?`);
+    suggestions.push(`¿Cuál es el precio de mercado para ${cropDisplay}?`);
+  } else if (muniText) {
+    suggestions.push(`¿Qué cultivo es más viable en ${muniText}?`);
+    suggestions.push(`¿Cómo está el clima actual en ${muniText}?`);
+    suggestions.push(`¿Cuáles son los riesgos agroclimáticos en ${muniText}?`);
+    suggestions.push("¿Qué significan los niveles de riesgo?");
+    suggestions.push("¿Cuáles son los 87 municipios de Santander?");
+  } else if (crop) {
+    suggestions.push(`¿Cuáles son los requisitos de siembra para ${cropDisplay}?`);
+    suggestions.push(`¿Cuál es el precio internacional de ${cropDisplay}?`);
+    suggestions.push(`¿En qué municipios de Santander se cultiva más ${cropDisplay}?`);
+    suggestions.push("¿Qué significan los niveles de riesgo?");
+    suggestions.push("¿Cómo hacer agricultura sostenible?");
+  } else {
+    suggestions.push("¿Qué cultivo me recomiendas para Santander?");
+    suggestions.push("¿Cuáles son los 87 municipios de Santander?");
+    suggestions.push("¿Qué significan los niveles de riesgo agroclimático?");
+    suggestions.push("¿Cómo funciona la predicción Theil-Sen?");
+    suggestions.push("¿Cómo hacer agricultura sostenible?");
   }
-
-  suggestions.push("¿Qué significan los niveles de riesgo?");
-  suggestions.push("¿Cómo hacer agricultura sostenible?");
-  suggestions.push("¿Cuáles son los 87 municipios de Santander?");
 
   return suggestions.slice(0, 5);
 }

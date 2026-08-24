@@ -14,6 +14,8 @@ import type {
   StatisticalForecastPoint,
   ChartFilters,
   SeriesQueryResult,
+  SeriesQueryStatus,
+  GeminiAssessment,
 } from "@/types/historical-prediction";
 
 export type {
@@ -21,8 +23,10 @@ export type {
   ChartFilters,
   ClimateFeatures,
   SeriesQueryResult,
+  SeriesQueryStatus,
   ValidatedHistoricalObservation,
   StatisticalForecastPoint,
+  GeminiAssessment,
 };
 
 export { extractClimateFeatures };
@@ -60,33 +64,45 @@ export function normalizeHistoricalPredictionData(
 }
 
 /**
- * Resolves municipality ID from Supabase using multiple fallback strategies:
- * 1. Direct ID slug match (e.g. "bucaramanga", "san_gil")
- * 2. Unaccented case-insensitive ILIKE match on "nombre"
+ * Resolves a municipality name to its official UUID from Supabase.
  */
-export async function resolveMunicipalityId(municipioName: string): Promise<string | null> {
-  if (!isSupabaseConfigured() || !municipioName) return null;
-
-  const slug = normalizeMunicipalitySlug(municipioName);
+export async function resolveMunicipalityId(municipalityName: string): Promise<string | null> {
+  if (!municipalityName || !isSupabaseConfigured()) return null;
 
   try {
-    const { data: byId } = await supabase
+    const raw = municipalityName.trim();
+
+    // 1. Exact match
+    const { data: exact } = await supabase
       .from("municipios")
       .select("id")
-      .eq("id", slug)
+      .ilike("nombre", raw)
+      .limit(1)
       .maybeSingle();
 
-    if (byId?.id) return byId.id;
+    if (exact?.id) return exact.id;
 
-    const { data: byIlike } = await supabase
-      .from("municipios")
-      .select("id")
-      .ilike("nombre", municipioName.trim())
-      .maybeSingle();
+    // 2. Unaccented match
+    const unaccented = raw
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
 
-    if (byIlike?.id) return byIlike.id;
+    const { data: allMunis } = await supabase.from("municipios").select("id, nombre").limit(200);
 
-    const upperUnaccented = municipioName
+    if (allMunis && Array.isArray(allMunis)) {
+      const match = allMunis.find((m) => {
+        const norm = m.nombre
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+        return norm === unaccented || norm.includes(unaccented) || unaccented.includes(norm);
+      });
+      if (match?.id) return match.id;
+    }
+
+    // 3. Fallback ILIKE pattern
+    const upperUnaccented = raw
       .toUpperCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
@@ -130,7 +146,6 @@ export function calculateAgroclimaticYieldPrediction({
   );
 
   // If fewer than 3 valid historical points are provided, return empty array (insufficient data).
-  // Never create synthetic observations or substitute real data with base constants.
   if (valid.length < 3) {
     return [];
   }
@@ -148,8 +163,8 @@ export function calculateAgroclimaticYieldPrediction({
 }
 
 /**
- * Main query function: fetches real verified historical observations, executes
- * the reproducible statistical forecasting engine, and asynchronously queries Gemini.
+ * Main query function: fetches real verified historical observations and
+ * executes the reproducible statistical forecasting engine immediately without blocking on Gemini.
  */
 export async function fetchHistoricalAndPredictionDetails(
   filters: ChartFilters,
@@ -172,8 +187,22 @@ export async function fetchHistoricalAndPredictionDetails(
 
   if (!municipality || !crop) return emptyResult;
 
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return {
+      ...emptyResult,
+      status: "network_error",
+      errorMessage: "Se requiere conexión a internet para consultar registros históricos de EVA.",
+    };
+  }
+
   const muniId = await resolveMunicipalityId(municipality);
-  if (!muniId) return { ...emptyResult, status: "error" };
+  if (!muniId) {
+    return {
+      ...emptyResult,
+      status: "municipality_not_found",
+      errorMessage: `El municipio "${municipality}" no fue encontrado en el catálogo oficial de Santander.`,
+    };
+  }
 
   const minYear = yearRange ? yearRange[0] : 2015;
   const maxYear = yearRange ? yearRange[1] : 2028;
@@ -191,7 +220,14 @@ export async function fetchHistoricalAndPredictionDetails(
     if (maxYear) histQuery = histQuery.lte("anio", Math.min(maxYear, currentYear));
 
     const { data: histData, error: histError } = await histQuery;
-    if (histError) throw histError;
+    if (histError) {
+      console.warn("[HistoricalPrediction] Supabase query error:", histError);
+      return {
+        ...emptyResult,
+        status: "database_error",
+        errorMessage: "Error al consultar la base de datos de rendimiento histórico.",
+      };
+    }
 
     const obsByYear = new Map<number, ValidatedHistoricalObservation>();
 
@@ -223,7 +259,7 @@ export async function fetchHistoricalAndPredictionDetails(
               isHistorical: true,
             });
           } else {
-            // Formal deduplication: weighted average by harvested surface area if available
+            // Weighted average by harvested surface area if available
             const area1 = existing.harvestedAreaHa || 1;
             const area2 = row.superficie_ha || 1;
             const weightedYield = +(
@@ -240,26 +276,31 @@ export async function fetchHistoricalAndPredictionDetails(
     }
 
     const validatedObservations = Array.from(obsByYear.values()).sort((a, b) => a.year - b.year);
+
+    if (validatedObservations.length === 0) {
+      return {
+        ...emptyResult,
+        municipalityId: muniId,
+        status: "no_historical_data",
+        errorMessage: `No existen registros históricos reportados en EVA para ${crop} en ${municipality}.`,
+      };
+    }
+
     const historicalForForecast = validatedObservations.map((o) => ({
       year: o.year,
       yield: o.yieldTonHa,
       harvestedAreaHa: o.harvestedAreaHa,
     }));
 
-    const lastObservedYear =
-      validatedObservations.length > 0
-        ? Math.max(...validatedObservations.map((o) => o.year))
-        : null;
+    const lastObservedYear = Math.max(...validatedObservations.map((o) => o.year));
 
     // 2. Extract zonal climate features
     const features = extractClimateFeatures(municipality, muniId, climateState);
 
     // Target forecast horizon: next 2 to 3 future years strictly after lastObservedYear
-    const targetYears = lastObservedYear
-      ? [lastObservedYear + 1, lastObservedYear + 2, lastObservedYear + 3].filter(
-          (y) => y <= maxYear,
-        )
-      : [currentYear, currentYear + 1];
+    const targetYears = [lastObservedYear + 1, lastObservedYear + 2, lastObservedYear + 3].filter(
+      (y) => y <= maxYear,
+    );
 
     // 3. Generate reproducible statistical forecast
     const forecastResult = generateStatisticalForecast({
@@ -268,36 +309,27 @@ export async function fetchHistoricalAndPredictionDetails(
       crop,
       historicalRecords: historicalForForecast,
       features,
-      targetYears,
+      targetYears: targetYears.length > 0 ? targetYears : [lastObservedYear + 1],
     });
 
-    // 4. Request Gemini agronomic assessment (responsible reasoning layer)
-    let geminiAssessment = null;
-    if (forecastResult.status === "ready" && forecastResult.predictions.length > 0) {
-      const firstPrediction = forecastResult.predictions[0];
-      geminiAssessment = await requestGeminiAgronomicAssessment({
-        municipio: municipality,
-        crop,
-        historicalYields: historicalForForecast.map((h) => ({ year: h.year, yield: h.yield })),
-        predictedYield: firstPrediction.predictedYield,
-        modelName: firstPrediction.modelName,
-        features,
-      });
-    }
-
-    // 5. Build unified points for chart rendering
+    // 4. Build unified points for chart rendering
     const points = buildUnifiedSeriesPoints(validatedObservations, forecastResult.predictions);
+
+    let finalStatus: SeriesQueryStatus = "ready";
+    if (forecastResult.status === "insufficient_data") {
+      finalStatus = "insufficient_data";
+    }
 
     return {
       municipalityId: muniId,
       municipalityName: municipality,
       cropId: crop,
       lastObservedYear,
-      status: forecastResult.status === "insufficient_data" ? "insufficient_data" : "ready",
+      status: finalStatus,
       historicalObservations: validatedObservations,
       predictions: forecastResult.predictions,
       points: normalizeHistoricalPredictionData(points),
-      geminiAssessment,
+      geminiAssessment: null, // Loaded asynchronously by secondary query
       insufficientDataReason: forecastResult.insufficientReason,
     };
   } catch (err) {
@@ -305,8 +337,37 @@ export async function fetchHistoricalAndPredictionDetails(
     return {
       ...emptyResult,
       status: "error",
+      errorMessage: err instanceof Error ? err.message : "Error inesperado al procesar los datos.",
     };
   }
+}
+
+/**
+ * Asynchronous secondary query for Gemini qualitative agronomic assessment
+ */
+export async function fetchGeminiAssessmentForSeries({
+  municipality,
+  crop,
+  historicalRecords,
+  predictedYield,
+  modelName,
+  features,
+}: {
+  municipality: string;
+  crop: CropKey;
+  historicalRecords: { year: number; yield: number }[];
+  predictedYield: number;
+  modelName: string;
+  features: ClimateFeatures;
+}): Promise<GeminiAssessment | null> {
+  return requestGeminiAgronomicAssessment({
+    municipio: municipality,
+    crop,
+    historicalYields: historicalRecords,
+    predictedYield,
+    modelName,
+    features,
+  });
 }
 
 /**

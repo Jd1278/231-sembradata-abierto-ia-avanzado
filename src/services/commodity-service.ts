@@ -40,6 +40,9 @@ export interface CommodityPrice {
   sourceTimestamp: string;
   fetchedAt: string;
   isCached: boolean;
+  status: "live" | "cached" | "unavailable";
+  errorCode?: string;
+  errorMessage?: string;
 }
 
 export interface RawCommodityForecast {
@@ -102,32 +105,72 @@ export class HttpCommodityPriceProvider implements CommodityPriceProvider {
 
 export const GRANADILLA_UNAVAILABLE: CommodityPrice = {
   crop: "granadilla",
-  label: "Granadilla",
+  label: "Granadilla (Referencia SIPSA)",
   price: null,
   unit: "—",
-  currency: null,
+  currency: "COP",
   normalizedPricePerKg: null,
-  market: "Sin contrato internacional equivalente",
+  market: "Sin contrato internacional equivalente (Mercado Nacional)",
   instrument: null,
   contract: null,
   referenceType: "unavailable",
   disclaimer:
-    "La granadilla no se cotiza en bolsas de futuros internacionales (ICE/NYBOT). Para precios de referencia en Colombia consulte el boletín diario SIPSA del DANE.",
+    "La granadilla no se cotiza en bolsas de futuros internacionales (ICE/NYBOT). Para precios de referencia en Colombia consulte el boletín diario SIPSA del DANE para Centroabastos (Bucaramanga).",
   change: null,
   changePercent: null,
   signal: "N/D",
-  recommendation: "N/D",
+  recommendation: "Comercialización en mercados locales / mayoristas",
   climateScore: 0,
   confidence: 0,
   reasoning:
-    "No existe cotización internacional estandarizada de futuros para passiflora ligularis.",
+    "No existe cotización internacional estandarizada de futuros para Passiflora ligularis. La referencia de precios es el boletín mayorista nacional.",
   stressors: [],
   regions: [],
   sources: ["DANE SIPSA (referencia nacional)"],
   sourceTimestamp: new Date().toISOString(),
   fetchedAt: new Date().toISOString(),
   isCached: false,
+  status: "unavailable",
 };
+
+export function buildUnavailableCommodity(
+  crop: CropKey,
+  errorMessage = "Cotización internacional no disponible temporalmente",
+): CommodityPrice {
+  const isCocoa = crop === "cacao";
+  return {
+    crop,
+    label: isCocoa
+      ? "Cacao en Grano (Referencia ICE)"
+      : "Café Arábica Verde Lavado (Referencia ICE)",
+    price: null,
+    unit: isCocoa ? "USD/MT" : "¢/lb",
+    currency: "USD",
+    normalizedPricePerKg: null,
+    market: "ICE Futures U.S. (Nueva York)",
+    instrument: isCocoa ? "ICE US Cocoa (CC)" : "ICE US Coffee C (KC)",
+    contract: null,
+    referenceType: "international_futures",
+    disclaimer:
+      "Información de mercado de referencia no disponible en este momento. Intente más tarde.",
+    change: null,
+    changePercent: null,
+    signal: "NO_DISPONIBLE",
+    recommendation: "Sin datos de mercado",
+    climateScore: 0,
+    confidence: 0,
+    reasoning: errorMessage,
+    stressors: [],
+    regions: [],
+    sources: ["Proveedor de mercado externo"],
+    sourceTimestamp: new Date().toISOString(),
+    fetchedAt: new Date().toISOString(),
+    isCached: false,
+    status: "unavailable",
+    errorCode: "PROVIDER_UNAVAILABLE",
+    errorMessage,
+  };
+}
 
 export function normalizePerKg(value: number | null, unit: string): number | null {
   if (value === null || !Number.isFinite(value)) return null;
@@ -187,8 +230,8 @@ export class CommodityService {
       contract: isCocoa ? "Cacao Grano Grado 1" : "Café Arábica Lavado Suave",
       referenceType: "international_futures",
       disclaimer: isCocoa
-        ? "Cotización de futuros internacionales en bolsa de Nueva York (ICE). No representa el precio de compra local en finca (cacao en baba/seco nacional)."
-        : "Cotización de futuros de café arábica lavado en bolsa (ICE Coffee C). No equivale al precio interno de compra de la FNC ni café pergamino en finca.",
+        ? "Cotización de futuros internacionales en bolsa de Nueva York (ICE). No representa el precio de compra local en finca (cacao en baba/seco nacional). No constituye asesoría financiera."
+        : "Cotización de futuros de café arábica lavado en bolsa (ICE Coffee C). No equivale al precio interno de compra de la FNC ni café pergamino en finca. No constituye asesoría financiera.",
       change: null,
       changePercent: null,
       signal: forecast.signal || "NEUTRAL",
@@ -210,6 +253,7 @@ export class CommodityService {
         forecast.currentPrice?.date || forecast.forecastedAt || new Date().toISOString(),
       fetchedAt: new Date().toISOString(),
       isCached,
+      status: isCached ? "cached" : "live",
     };
   }
 
@@ -226,22 +270,25 @@ export class CommodityService {
       if (cached) {
         return this.mapToCommodityPrice(crop, cached, true);
       }
-      throw err;
+      return buildUnavailableCommodity(
+        crop,
+        err instanceof Error ? err.message : "Proveedor de mercado no disponible",
+      );
     }
   }
 
   async getAllCommodityPrices(): Promise<CommodityPrice[]> {
-    const results = await Promise.allSettled([
+    const [cafeRes, cacaoRes] = await Promise.allSettled([
       this.getCommodityPrice("cafe"),
       this.getCommodityPrice("cacao"),
     ]);
 
-    const list: CommodityPrice[] = [];
-    if (results[0].status === "fulfilled") list.push(results[0].value);
-    if (results[1].status === "fulfilled") list.push(results[1].value);
-    list.push(GRANADILLA_UNAVAILABLE);
+    const cafePrice =
+      cafeRes.status === "fulfilled" ? cafeRes.value : buildUnavailableCommodity("cafe");
+    const cacaoPrice =
+      cacaoRes.status === "fulfilled" ? cacaoRes.value : buildUnavailableCommodity("cacao");
 
-    return list;
+    return [cafePrice, cacaoPrice, GRANADILLA_UNAVAILABLE];
   }
 }
 

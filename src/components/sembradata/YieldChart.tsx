@@ -3,12 +3,24 @@ import { useQuery } from "@tanstack/react-query";
 import type { CropKey } from "@/types/crops";
 import {
   fetchHistoricalAndPredictionDetails,
+  fetchGeminiAssessmentForSeries,
+  extractClimateFeatures,
   type ChartFilters,
   type SeriesQueryResult,
   type HistoricalPredictionPoint,
+  type GeminiAssessment,
 } from "@/services/historical-prediction-service";
 import type { MunicipalityClimateState } from "@/services/climate-state";
-import { AlertCircle, CheckCircle2, Sparkles } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Sparkles,
+  WifiOff,
+  RefreshCw,
+  Info,
+  Loader2,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   crop: CropKey;
@@ -38,6 +50,7 @@ export const YieldChart = memo(function YieldChart({
     [crop, municipio, filters],
   );
 
+  // 1. Primary Query: Fetches real EVA historical observations & Theil-Sen statistical forecast immediately
   const {
     data: seriesResult,
     isLoading,
@@ -47,10 +60,51 @@ export const YieldChart = memo(function YieldChart({
   } = useQuery<SeriesQueryResult>({
     queryKey: ["historical-prediction-details", crop, municipio, filters, climateState?.computedAt],
     queryFn: () => fetchHistoricalAndPredictionDetails(chartFilters, climateState),
-    staleTime: 1000 * 60 * 15, // 15 minutes
-    gcTime: 1000 * 60 * 60, // 1 hour
+    staleTime: 1000 * 60 * 15,
+    gcTime: 1000 * 60 * 60,
     enabled: Boolean(municipio && crop),
   });
+
+  // 2. Secondary Query: Asynchronously fetches Gemini qualitative agronomic assessment without blocking chart
+  const { data: asyncGeminiAssessment, isLoading: isGeminiLoading } =
+    useQuery<GeminiAssessment | null>({
+      queryKey: [
+        "gemini-assessment",
+        crop,
+        municipio,
+        seriesResult?.predictions[0]?.predictedYield,
+        seriesResult?.predictions[0]?.modelName,
+      ],
+      queryFn: () => {
+        if (!seriesResult || seriesResult.predictions.length === 0) return null;
+        const first = seriesResult.predictions[0];
+        const features = extractClimateFeatures(
+          municipio,
+          seriesResult.municipalityId,
+          climateState,
+        );
+        return fetchGeminiAssessmentForSeries({
+          municipality: municipio,
+          crop,
+          historicalRecords: seriesResult.historicalObservations.map((h) => ({
+            year: h.year,
+            yield: h.yieldTonHa,
+          })),
+          predictedYield: first.predictedYield,
+          modelName: first.modelName,
+          features,
+        });
+      },
+      enabled: Boolean(
+        seriesResult &&
+        seriesResult.status === "ready" &&
+        seriesResult.predictions.length > 0 &&
+        !seriesResult.geminiAssessment,
+      ),
+      staleTime: 1000 * 60 * 30,
+    });
+
+  const activeGeminiAssessment = seriesResult?.geminiAssessment ?? asyncGeminiAssessment ?? null;
 
   const points: HistoricalPredictionPoint[] = useMemo(
     () => seriesResult?.points ?? [],
@@ -72,27 +126,74 @@ export const YieldChart = memo(function YieldChart({
     [points],
   );
 
-  const lastObservedYear = seriesResult?.lastObservedYear ?? null;
   const isInsufficientData = seriesResult?.status === "insufficient_data";
-  const geminiAssessment = seriesResult?.geminiAssessment ?? null;
 
   if (isLoading) {
     return <div className="h-[260px] animate-pulse rounded-xl bg-muted/60" />;
   }
 
-  if (isError) {
+  if (seriesResult?.status === "network_error") {
+    return (
+      <div className="flex h-[260px] flex-col items-center justify-center p-6 text-center">
+        <WifiOff className="h-6 w-6 text-muted-foreground mb-2" />
+        <p className="text-xs font-medium text-foreground">Sin conexión a internet</p>
+        <p className="text-[11px] text-muted-foreground mt-1 max-w-xs">
+          {seriesResult.errorMessage ||
+            "Se requiere conexión para consultar la serie histórica de EVA."}
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => refetch()}
+          className="mt-3 h-7 text-xs rounded-lg"
+        >
+          <RefreshCw className="h-3 w-3 mr-1.5" /> Reintentar
+        </Button>
+      </div>
+    );
+  }
+
+  if (seriesResult?.status === "municipality_not_found") {
+    return (
+      <div className="flex h-[260px] flex-col items-center justify-center p-6 text-center">
+        <AlertCircle className="h-6 w-6 text-amber-500 mb-2" />
+        <p className="text-xs font-medium text-foreground">Municipio no reconocido</p>
+        <p className="text-[11px] text-muted-foreground mt-1 max-w-xs">
+          {seriesResult.errorMessage ||
+            `El municipio "${municipio}" no se encuentra en el catálogo oficial de Santander.`}
+        </p>
+      </div>
+    );
+  }
+
+  if (seriesResult?.status === "no_historical_data") {
+    return (
+      <div className="flex h-[260px] flex-col items-center justify-center p-6 text-center">
+        <Info className="h-6 w-6 text-muted-foreground mb-2" />
+        <p className="text-xs font-medium text-foreground">Sin registros de producción histórica</p>
+        <p className="text-[11px] text-muted-foreground mt-1 max-w-xs">
+          {seriesResult.errorMessage ||
+            `No se registran datos oficiales de EVA para ${crop} en ${municipio}.`}
+        </p>
+      </div>
+    );
+  }
+
+  if (isError || seriesResult?.status === "error" || seriesResult?.status === "database_error") {
     return (
       <div className="flex h-[260px] flex-col items-center justify-center p-4 text-center">
         <p className="text-xs font-medium text-destructive">
-          Error al cargar la serie de rendimiento:{" "}
-          {error instanceof Error ? error.message : "Error desconocido"}
+          {seriesResult?.errorMessage ||
+            (error instanceof Error ? error.message : "Error al cargar la serie de rendimiento")}
         </p>
-        <button
+        <Button
+          size="sm"
+          variant="outline"
           onClick={() => refetch()}
-          className="mt-2 rounded-lg bg-muted px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted/80"
+          className="mt-3 h-7 text-xs rounded-lg"
         >
-          Reintentar
-        </button>
+          <RefreshCw className="h-3 w-3 mr-1.5" /> Reintentar
+        </Button>
       </div>
     );
   }
@@ -100,7 +201,7 @@ export const YieldChart = memo(function YieldChart({
   if (!points.length || !values.length) {
     return (
       <div className="grid h-[260px] place-items-center p-6 text-center text-xs leading-relaxed text-muted-foreground">
-        No se encontraron series de rendimiento histórico de EVA ni proyecciones para{" "}
+        No se encontraron observaciones de rendimiento histórico para{" "}
         <strong className="text-foreground">{municipio || "este municipio"}</strong>.
       </div>
     );
@@ -117,7 +218,7 @@ export const YieldChart = memo(function YieldChart({
   const x = (i: number) => PAD.left + (i / Math.max(1, points.length - 1)) * pw;
   const y = (v: number) => PAD.top + ph - ((v - min) / Math.max(0.1, max - min)) * ph;
 
-  // Split historical vs prediction indices
+  // Split historical vs prediction points
   const historicalPoints = points.filter((p) => p.dataType === "historical");
   const predictionPoints = points.filter((p) => p.dataType === "prediction");
 
@@ -131,11 +232,10 @@ export const YieldChart = memo(function YieldChart({
     }
   });
 
-  // Build SVG path for statistical prediction (linking from last historical point if available)
+  // Build SVG path for statistical prediction
   let predPath = "";
   let predStarted = false;
 
-  // Include last historical point as starting anchor for smooth visual transition
   let lastHistIdx = -1;
   for (let i = points.length - 1; i >= 0; i--) {
     if (points[i].dataType === "historical") {
@@ -159,11 +259,10 @@ export const YieldChart = memo(function YieldChart({
     }
   });
 
-  // Build Confidence Polygon for 95% interval
+  // Build Confidence Area Polygon (80% and 95%)
   const buildConfidenceArea = (level: 80 | 95) => {
     const predCoords: { xVal: number; lowerVal: number; upperVal: number }[] = [];
 
-    // If we have an anchor from the last historical point
     if (lastHistIdx !== -1 && predictionPoints.length > 0) {
       const lastHist = points[lastHistIdx];
       if (lastHist.historicalValue !== null) {
@@ -178,21 +277,19 @@ export const YieldChart = memo(function YieldChart({
     points.forEach((p, i) => {
       if (p.dataType === "prediction") {
         const lower =
-          level === 80 ? (p.lowerBound80 ?? p.lowerBound) : (p.lowerBound95 ?? p.lowerBound);
+          level === 80
+            ? (p.lowerBound80 ?? p.lowerBound ?? p.predictedValue ?? 0)
+            : (p.lowerBound95 ?? p.lowerBound ?? p.predictedValue ?? 0);
         const upper =
-          level === 80 ? (p.upperBound80 ?? p.upperBound) : (p.upperBound95 ?? p.upperBound);
-        if (
-          typeof lower === "number" &&
-          typeof upper === "number" &&
-          Number.isFinite(lower) &&
-          Number.isFinite(upper)
-        ) {
-          predCoords.push({
-            xVal: x(i),
-            lowerVal: y(lower),
-            upperVal: y(upper),
-          });
-        }
+          level === 80
+            ? (p.upperBound80 ?? p.upperBound ?? p.predictedValue ?? 0)
+            : (p.upperBound95 ?? p.upperBound ?? p.predictedValue ?? 0);
+
+        predCoords.push({
+          xVal: x(i),
+          lowerVal: y(lower),
+          upperVal: y(upper),
+        });
       }
     });
 
@@ -201,8 +298,7 @@ export const YieldChart = memo(function YieldChart({
     const topPath = predCoords
       .map((c, idx) => `${idx === 0 ? "M" : "L"}${c.xVal},${c.upperVal}`)
       .join(" ");
-    const bottomPath = predCoords
-      .slice()
+    const bottomPath = [...predCoords]
       .reverse()
       .map((c) => `L${c.xVal},${c.lowerVal}`)
       .join(" ");
@@ -210,26 +306,32 @@ export const YieldChart = memo(function YieldChart({
     return `${topPath} ${bottomPath} Z`;
   };
 
-  const area95Path = buildConfidenceArea(95);
-  const area80Path = buildConfidenceArea(80);
+  const confidencePath95 = buildConfidenceArea(95);
+  const confidencePath80 = buildConfidenceArea(80);
 
-  // Transition vertical line index
-  const transitionX = lastHistIdx !== -1 ? x(lastHistIdx) : null;
   const hoveredPoint = hoveredIdx !== null ? points[hoveredIdx] : null;
 
   return (
     <div className="space-y-3">
-      {/* Insufficient data notification banner */}
+      {/* Insufficient Data Warning Banner */}
       {isInsufficientData && (
-        <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <div>
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
             <p className="font-semibold">Muestreo histórico insuficiente</p>
-            <p className="text-[11px] opacity-90">
-              {seriesResult?.insufficientDataReason ??
-                "Se requieren al menos 3 años de registros históricos oficiales de EVA para formular una proyección estadística reproducible."}
+            <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+              {seriesResult?.insufficientDataReason ||
+                "Se requieren al menos 3 años de datos observados por MinAgricultura / EVA para generar una proyección estadística validada. Se muestran únicamente las observaciones reales registradas."}
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Chart Sub-Header with Forecast Start */}
+      {lastHistIdx !== -1 && predictionPoints.length > 0 && (
+        <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground px-1">
+          <span>Inicio Pronóstico ({points[lastHistIdx].year})</span>
+          <span>{predictionPoints.length} años proyectados</span>
         </div>
       )}
 
@@ -237,14 +339,14 @@ export const YieldChart = memo(function YieldChart({
       <div className="relative">
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="w-full overflow-visible"
+          className="w-full overflow-visible select-none"
           role="img"
-          aria-label={`Gráfico de rendimiento histórico vs predicción para ${crop} en ${municipio}`}
+          aria-label={`Gráfico de rendimiento histórico y predicción para ${crop} en ${municipio}`}
         >
-          {/* Y-axis gridlines & labels */}
+          {/* Y-Axis Grid Lines & Labels */}
           {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-            const v = min + ratio * (max - min);
-            const yPos = PAD.top + ph - ratio * ph;
+            const val = min + ratio * (max - min);
+            const yPos = y(val);
             return (
               <g key={ratio}>
                 <line
@@ -252,149 +354,141 @@ export const YieldChart = memo(function YieldChart({
                   y1={yPos}
                   x2={W - PAD.right}
                   y2={yPos}
-                  className="stroke-border/50"
+                  stroke="currentColor"
+                  className="text-border/60"
                   strokeDasharray="3 3"
-                  strokeWidth="0.8"
                 />
                 <text
                   x={PAD.left - 8}
-                  y={yPos + 3.5}
+                  y={yPos + 4}
                   textAnchor="end"
-                  className="fill-muted-foreground text-[10px]"
+                  className="fill-muted-foreground text-[9px] font-mono"
                 >
-                  {v.toFixed(1)}
+                  {val.toFixed(1)}
                 </text>
               </g>
             );
           })}
 
-          {/* Dual Confidence Interval Shaded Polygons */}
-          {area95Path && (
-            <path
-              d={area95Path}
-              className="fill-primary/10 transition-opacity duration-200 dark:fill-primary/15"
-            />
-          )}
-          {area80Path && (
-            <path
-              d={area80Path}
-              className="fill-primary/20 transition-opacity duration-200 dark:fill-primary/25"
+          {/* Division Line for Last Observed Year */}
+          {lastHistIdx !== -1 && predictionPoints.length > 0 && (
+            <line
+              x1={x(lastHistIdx)}
+              y1={PAD.top}
+              x2={x(lastHistIdx)}
+              y2={H - PAD.bottom}
+              stroke="currentColor"
+              className="text-muted-foreground/40"
+              strokeDasharray="4 4"
             />
           )}
 
-          {/* Historical Trend Line (Solid) */}
+          {/* Confidence Intervals */}
+          {confidencePath95 && (
+            <path
+              d={confidencePath95}
+              fill="currentColor"
+              className="text-primary/10 transition-opacity"
+            />
+          )}
+          {confidencePath80 && (
+            <path
+              d={confidencePath80}
+              fill="currentColor"
+              className="text-primary/20 transition-opacity"
+            />
+          )}
+
+          {/* Historical Path (Solid Line) */}
           {histPath && (
             <path
               d={histPath}
               fill="none"
-              className="stroke-primary"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              stroke="currentColor"
+              className="text-primary stroke-2"
             />
           )}
 
-          {/* Statistical Prediction Line (Dashed) */}
+          {/* Prediction Path (Dashed Line) */}
           {predPath && (
             <path
               d={predPath}
               fill="none"
-              className="stroke-primary"
-              strokeWidth="2.2"
-              strokeDasharray="5 4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              stroke="currentColor"
+              className="text-primary stroke-2"
+              strokeDasharray="4 4"
             />
           )}
 
-          {/* Transition vertical line at last observed year */}
-          {transitionX !== null && predictionPoints.length > 0 && (
-            <g>
-              <line
-                x1={transitionX}
-                y1={PAD.top}
-                x2={transitionX}
-                y2={PAD.top + ph}
-                className="stroke-muted-foreground/60"
-                strokeWidth="1"
-                strokeDasharray="2 2"
-              />
-              <text
-                x={transitionX + 4}
-                y={PAD.top + 10}
-                className="fill-muted-foreground text-[9px] font-medium"
-              >
-                Inicio Pronóstico ({lastObservedYear})
-              </text>
-            </g>
-          )}
-
-          {/* X-axis labels and points */}
+          {/* Data Points */}
           {points.map((p, i) => {
+            const cx = x(i);
+            const cy = y(p.historicalValue ?? p.predictedValue ?? 0);
             const isHovered = hoveredIdx === i;
-            const xPos = x(i);
             const isHist = p.dataType === "historical";
-            const val = isHist ? p.historicalValue : p.predictedValue;
-            if (val === null) return null;
-            const yPos = y(val);
 
             return (
-              <g key={p.date}>
-                {/* Year Label */}
+              <g
+                key={`${p.date}-${i}`}
+                tabIndex={0}
+                role="button"
+                aria-label={`${p.year}: ${p.historicalValue ?? p.predictedValue} ton/ha`}
+                onMouseEnter={() => setHoveredIdx(i)}
+                onMouseLeave={() => setHoveredIdx(null)}
+                onFocus={() => setHoveredIdx(i)}
+                onBlur={() => setHoveredIdx(null)}
+                className="cursor-pointer focus:outline-none"
+              >
+                {/* Invisible hover target */}
+                <circle cx={cx} cy={cy} r={14} fill="transparent" />
+
+                {isHist ? (
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={isHovered ? 6 : 4}
+                    className="fill-primary stroke-background stroke-2 transition-all duration-150"
+                  />
+                ) : (
+                  <rect
+                    x={cx - (isHovered ? 5 : 3.5)}
+                    y={cy - (isHovered ? 5 : 3.5)}
+                    width={isHovered ? 10 : 7}
+                    height={isHovered ? 10 : 7}
+                    transform={`rotate(45 ${cx} ${cy})`}
+                    className="fill-background stroke-primary stroke-2 transition-all duration-150"
+                  />
+                )}
+
+                {/* X-Axis Year Labels */}
                 <text
-                  x={xPos}
-                  y={PAD.top + ph + 16}
+                  x={cx}
+                  y={H - PAD.bottom + 14}
                   textAnchor="middle"
-                  className={`text-[10px] transition-colors ${
-                    isHovered ? "fill-foreground font-bold" : "fill-muted-foreground"
+                  className={`text-[9px] font-mono ${
+                    isHist ? "fill-foreground font-medium" : "fill-primary font-bold"
                   }`}
                 >
                   {p.year}
                 </text>
-
-                {/* Point Marker */}
-                {isHist ? (
-                  // Historical Observation (Solid Circle)
-                  <circle
-                    cx={xPos}
-                    cy={yPos}
-                    r={isHovered ? 5.5 : 4}
-                    className="cursor-pointer fill-primary stroke-background transition-all"
-                    strokeWidth={isHovered ? 2 : 1.5}
-                    onMouseEnter={() => setHoveredIdx(i)}
-                    onMouseLeave={() => setHoveredIdx(null)}
-                  />
-                ) : (
-                  // Statistical Prediction (Rhombus / Diamond)
-                  <rect
-                    x={xPos - (isHovered ? 5 : 3.8)}
-                    y={yPos - (isHovered ? 5 : 3.8)}
-                    width={isHovered ? 10 : 7.6}
-                    height={isHovered ? 10 : 7.6}
-                    transform={`rotate(45 ${xPos} ${yPos})`}
-                    className="cursor-pointer fill-background stroke-primary transition-all"
-                    strokeWidth={isHovered ? 2.2 : 1.8}
-                    onMouseEnter={() => setHoveredIdx(i)}
-                    onMouseLeave={() => setHoveredIdx(null)}
-                  />
-                )}
               </g>
             );
           })}
         </svg>
 
-        {/* Hover Floating Tooltip */}
-        {hoveredPoint !== null && hoveredIdx !== null && (
+        {/* Hover Tooltip Card */}
+        {hoveredPoint && (
           <div
-            className="pointer-events-none absolute -top-2 z-20 w-64 rounded-xl border border-border/80 bg-background/95 p-2.5 text-xs shadow-lg backdrop-blur"
+            className="absolute z-20 rounded-xl border border-border bg-popover/95 p-2.5 shadow-lg backdrop-blur text-xs min-w-[210px] pointer-events-none"
             style={{
-              left: `${Math.min(Math.max(10, (hoveredIdx / Math.max(1, points.length - 1)) * 100), 65)}%`,
+              left: `${Math.min(W - 220, Math.max(10, x(hoveredIdx ?? 0) - 100))}px`,
+              top: "4px",
             }}
           >
-            <div className="flex items-center justify-between border-b border-border/60 pb-1.5 font-semibold">
-              <span>Año {hoveredPoint.year}</span>
+            <div className="flex items-center justify-between border-b border-border/50 pb-1.5">
+              <span className="font-bold text-foreground">Año {hoveredPoint.year}</span>
               <span
-                className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+                className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${
                   hoveredPoint.dataType === "historical"
                     ? "bg-primary/15 text-primary"
                     : "bg-chart-2/20 text-foreground"
@@ -475,8 +569,15 @@ export const YieldChart = memo(function YieldChart({
         <span className="text-[10px]">Unidad: Toneladas / Hectárea</span>
       </div>
 
-      {/* Gemini Agronomic Assessment Card */}
-      {geminiAssessment && (
+      {/* Asynchronous Gemini Agronomic Assessment Card */}
+      {isGeminiLoading && (
+        <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 p-2.5 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+          <span>Consultando evaluación cualitativa con IA agronómica (Gemini)...</span>
+        </div>
+      )}
+
+      {activeGeminiAssessment && (
         <div className="rounded-xl border border-border/80 bg-muted/30 p-3 text-xs">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 font-semibold text-foreground">
@@ -484,7 +585,7 @@ export const YieldChart = memo(function YieldChart({
               <span>Evaluación Agronómica IA (Gemini)</span>
             </div>
             <div className="flex items-center gap-1">
-              {geminiAssessment.consistencyStatus === "valid" ? (
+              {activeGeminiAssessment.consistencyStatus === "valid" ? (
                 <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
                   <CheckCircle2 className="h-3 w-3" /> Coherente
                 </span>
@@ -497,12 +598,12 @@ export const YieldChart = memo(function YieldChart({
           </div>
 
           <p className="mt-1.5 text-muted-foreground leading-relaxed">
-            {geminiAssessment.explanation}
+            {activeGeminiAssessment.explanation}
           </p>
 
-          {geminiAssessment.riskFactors.length > 0 && (
+          {activeGeminiAssessment.riskFactors.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {geminiAssessment.riskFactors.map((rf, idx) => (
+              {activeGeminiAssessment.riskFactors.map((rf, idx) => (
                 <span
                   key={idx}
                   className="rounded-md bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground border border-border/60"

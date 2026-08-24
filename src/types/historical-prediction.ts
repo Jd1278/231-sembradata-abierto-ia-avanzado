@@ -129,15 +129,27 @@ export interface ChartFilters {
   soilType?: SoilType;
 }
 
+export type SeriesQueryStatus =
+  | "ready"
+  | "insufficient_data"
+  | "municipality_not_found"
+  | "no_historical_data"
+  | "network_error"
+  | "database_error"
+  | "permission_error"
+  | "error"
+  | "no_data";
+
 export interface SeriesQueryResult {
   municipalityId: string;
   municipalityName: string;
   cropId: CropKey;
   lastObservedYear: number | null;
-  status: "ready" | "insufficient_data" | "error" | "no_data";
+  status: SeriesQueryStatus;
   historicalObservations: ValidatedHistoricalObservation[];
   predictions: StatisticalForecastPoint[];
   points: HistoricalPredictionUnifiedPoint[];
   geminiAssessment: GeminiAssessment | null;
   insufficientDataReason?: string;
+  errorMessage?: string;
 }

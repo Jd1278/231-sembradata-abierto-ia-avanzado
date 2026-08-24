@@ -198,7 +198,14 @@ export function ChatbotPanel({ municipio, crop }: { municipio?: string; crop?: s
             ...CHAT_HEADERS,
             "x-request-id": clientRequestId,
           },
-          body: JSON.stringify({ message: q, sessionId }),
+          body: JSON.stringify({
+            message: q,
+            sessionId,
+            selectedContext: {
+              municipio: municipio || null,
+              cultivo: crop || null,
+            },
+          }),
           signal: controller.signal,
         });
       } finally {

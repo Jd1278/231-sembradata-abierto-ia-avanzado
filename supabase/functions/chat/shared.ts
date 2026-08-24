@@ -1,11 +1,20 @@
 import type { DeterministicContext } from "./deterministic.ts";
 
 export type Intent =
-  | "CROP_RECOMMENDATION"
+  | "CURRENT_CLIMATE"
+  | "HISTORICAL_YIELD"
+  | "STATISTICAL_PREDICTION"
+  | "MARKET_PRICE"
   | "CROP_RISK_ANALYSIS"
+  | "RISK_ANALYSIS"
+  | "CROP_RECOMMENDATION"
   | "CROP_REQUIREMENTS"
-  | "GENERAL"
+  | "MUNICIPALITY_LIST"
+  | "INDICATOR_EXPLANATION"
+  | "COMPARE_CROPS"
   | "GREETING"
+  | "GENERAL"
+  | "CLARIFICATION_REQUIRED"
   | "UNKNOWN";
 
 export function classifyIntent(msg: string): Intent {
@@ -17,8 +26,110 @@ export function classifyIntent(msg: string): Intent {
     .replace(/\s+/g, " ")
     .trim();
 
-  if (/^(hola|buenos dias|buenas tardes|buenas noches)/.test(ascii)) return "GREETING";
+  // 1. Saludos
+  if (/^(hola|buenos dias|buenas tardes|buenas noches|que tal|saludos|hey|buen dia)/.test(ascii)) {
+    return "GREETING";
+  }
 
+  // 2. Consulta de municipios disponibles
+  if (
+    /87 municipios/.test(ascii) ||
+    /cuales municipios/.test(ascii) ||
+    /que municipios/.test(ascii) ||
+    /lista de municipios/.test(ascii) ||
+    /municipios de santander/.test(ascii) ||
+    /cobertura de municipios/.test(ascii)
+  ) {
+    return "MUNICIPALITY_LIST";
+  }
+
+  // 3. Comparación entre cultivos
+  if (
+    /compar(ar|acion|a|ando)/.test(ascii) ||
+    (ascii.includes("cafe") && ascii.includes("cacao")) ||
+    (ascii.includes("cafe") && ascii.includes("granadilla")) ||
+    (ascii.includes("cacao") && ascii.includes("granadilla")) ||
+    /diferencia entre/.test(ascii) ||
+    /cual rinde mas/.test(ascii) ||
+    /cual produce mas/.test(ascii)
+  ) {
+    return "COMPARE_CROPS";
+  }
+
+  // 4. Explicación de indicadores agroclimáticos
+  if (
+    /que significa/.test(ascii) ||
+    /que es (el |la |un |una )?(gdd|aridez|evapotranspiracion|ndvi|ph|kpi|materia organica|score|viabilidad|indice)/.test(
+      ascii,
+    ) ||
+    /como se interpreta/.test(ascii) ||
+    /que quiere decir/.test(ascii)
+  ) {
+    return "INDICATOR_EXPLANATION";
+  }
+
+  // 5. Precios y mercado internacional
+  if (
+    /precio/.test(ascii) ||
+    /cotizacion/.test(ascii) ||
+    /mercado/.test(ascii) ||
+    /\bbolsa\b/.test(ascii) ||
+    /cuanto vale/.test(ascii) ||
+    /cuanto cuesta/.test(ascii) ||
+    /dolar/.test(ascii) ||
+    /centavos/.test(ascii) ||
+    /\bice\b/.test(ascii) ||
+    /\bsipsa\b/.test(ascii) ||
+    /vender/.test(ascii)
+  ) {
+    return "MARKET_PRICE";
+  }
+
+  // 6. Rendimiento histórico observado
+  if (
+    /historico/.test(ascii) ||
+    /historica/.test(ascii) ||
+    /produccion pasada/.test(ascii) ||
+    /cuanto se ha producido/.test(ascii) ||
+    /rendimiento anterior/.test(ascii) ||
+    /registros pasados/.test(ascii) ||
+    /eva/.test(ascii) ||
+    /minagricultura/.test(ascii)
+  ) {
+    return "HISTORICAL_YIELD";
+  }
+
+  // 7. Predicción y pronóstico futuro
+  if (
+    /prediccion/.test(ascii) ||
+    /proyeccion/.test(ascii) ||
+    /pronostico estadistico/.test(ascii) ||
+    /cuanto va a producir/.test(ascii) ||
+    /cuanto rendira/.test(ascii) ||
+    /rendimiento futuro/.test(ascii) ||
+    /proximos a(n|ñ)os/.test(ascii) ||
+    /theil sen/.test(ascii)
+  ) {
+    return "STATISTICAL_PREDICTION";
+  }
+
+  // 8. Clima actual y meteorología
+  if (
+    /clima actual/.test(ascii) ||
+    /temperatura actual/.test(ascii) ||
+    /esta lloviendo/.test(ascii) ||
+    /cuanto llueve/.test(ascii) ||
+    /lluvia hoy/.test(ascii) ||
+    /pronostico 7 dias/.test(ascii) ||
+    /humedad actual/.test(ascii) ||
+    /viento hoy/.test(ascii) ||
+    /radiacion solar/.test(ascii) ||
+    /estado del tiempo/.test(ascii)
+  ) {
+    return "CURRENT_CLIMATE";
+  }
+
+  // 9. Recomendación de cultivos y viabilidad
   if (
     /recomiend/.test(ascii) ||
     /viabilidad/.test(ascii) ||
@@ -28,9 +139,11 @@ export function classifyIntent(msg: string): Intent {
     (/cultivo/.test(ascii) && /conviene|recomienda|siembra|produce/.test(ascii)) ||
     /apto para/.test(ascii) ||
     /funciona en/.test(ascii)
-  )
+  ) {
     return "CROP_RECOMMENDATION";
+  }
 
+  // 10. Riesgos agroclimáticos
   if (
     /riesgo/.test(ascii) ||
     /peligro/.test(ascii) ||
@@ -39,10 +152,15 @@ export function classifyIntent(msg: string): Intent {
     /probabilidad/.test(ascii) ||
     /tiene exito/.test(ascii) ||
     /saldrá/.test(ascii) ||
-    /saldra/.test(ascii)
-  )
+    /saldra/.test(ascii) ||
+    /helada/.test(ascii) ||
+    /sequia/.test(ascii) ||
+    /plaga/.test(ascii)
+  ) {
     return "CROP_RISK_ANALYSIS";
+  }
 
+  // 11. Requisitos de siembra y agronómicos
   if (
     /requisito/.test(ascii) ||
     /como (sembrar|plantar|cultivar)/.test(ascii) ||
@@ -52,18 +170,26 @@ export function classifyIntent(msg: string): Intent {
     /\bcultivar\b/.test(ascii) ||
     /ciclo de vida/.test(ascii) ||
     /cuidados/.test(ascii) ||
-    /cosecha/.test(ascii)
-  )
+    /cosecha/.test(ascii) ||
+    /altitud optima/.test(ascii) ||
+    /ph optimo/.test(ascii)
+  ) {
     return "CROP_REQUIREMENTS";
+  }
 
-  return "UNKNOWN";
+  // 12. Consultas demasiado cortas o ambiguas
+  if (ascii.length < 5 || /^(que|como|cuando|donde|por que)\??$/.test(ascii)) {
+    return "CLARIFICATION_REQUIRED";
+  }
+
+  return "GENERAL";
 }
 
 const SYSTEM_PREAMBLE = `Eres el Asistente Agroclimático Oficial de SembraData para el departamento de Santander, Colombia.
 Tu propósito es explicar de manera pedagógica, concisa y 100% verificable los datos agroclimáticos reales de la plataforma.
 
 REGLAS DE ORO OBLIGATORIAS (ANTI-ALUCINACIÓN):
-1. Responde EXCLUSIVAMENTE en formato JSON válido.
+1. Responde EXCLUSIVAMENTE en formato JSON válido según el esquema solicitado.
 2. NO INVENTES ninguna cifra, porcentaje de viabilidad, rendimiento futuro, fecha de datos ni fuentes.
 3. Toda afirmación cuantitativa (temperatura, precipitación, altitud, rendimiento en ton/ha, pH) debe extraerse literalmente de los "Hechos Verificados" proporcionados.
 4. Distingue estrictamente entre:
@@ -74,7 +200,7 @@ REGLAS DE ORO OBLIGATORIAS (ANTI-ALUCINACIÓN):
    - "general_guidance": Orientaciones técnicas y buenas prácticas generales.
 5. Si falta un dato para responder a cabalidad, escribe con honestidad "dato no disponible" y establece "insufficientData": true.
 6. Nunca presentes una predicción como un hecho histórico observado.
-7. Nunca presentes una orientación general como si fuera una medición actual del municipio.`;
+7. Si el usuario pregunta por un municipio fuera de Santander (ej. Medellín, Bogotá, Cali), explícale con amabilidad que SembraData cubre exclusivamente los 87 municipios de Santander y sugiere municipios como San Gil, San Vicente de Chucurí o Rionegro.`;
 
 export function buildSystemPrompt(
   intent: Intent,
@@ -82,6 +208,9 @@ export function buildSystemPrompt(
   ragContext: string,
 ): string {
   const sections: string[] = [SYSTEM_PREAMBLE];
+
+  // Intención detectada
+  sections.push(`### INTENCIÓN DETECTADA DE LA CONSULTA:\n\`${intent}\``);
 
   // 1. Contexto Determinista
   sections.push("### HECHOS Y DATOS VERIFICADOS (ÚNICA FUENTE FACTUAL PERMITIDA)");
