@@ -6,20 +6,23 @@ Inventario de fuentes de datos primarias, secundarias y servicios de cómputo ut
 
 ## 1. Datos Históricos Oficiales y Requerimientos Agronómicos
 
-| Fuente / Institución                 | Descripción                                                                                   | Acceso / Protocolo                     | Rol en SembraData                                                                               |
-| :----------------------------------- | :-------------------------------------------------------------------------------------------- | :------------------------------------- | :---------------------------------------------------------------------------------------------- |
-| **MinAgricultura / EVA**             | Evaluaciones Agropecuarias Municipales históricas (rendimiento en Ton/Ha y superficie en Ha). | Supabase (`rendimiento_historico`)     | **Observación Histórica Oficial**. Serie fundamental para el cálculo de tendencias ($N \ge 3$). |
-| **Cenicafé / Fedecacao / AGROSAVIA** | Manuales técnicos y requerimientos agroclimáticos óptimos de Café, Cacao y Granadilla.        | Supabase (`crop_climate_requirements`) | **Reglas Agronómicas Deterministas** (temperatura, precipitación, altitud y pH).                |
+| Fuente / Institución                 | Descripción                                                                                                | Acceso / Protocolo                      | Rol en SembraData                                                                               |
+| :----------------------------------- | :--------------------------------------------------------------------------------------------------------- | :-------------------------------------- | :---------------------------------------------------------------------------------------------- |
+| Fuente / Institución                 | Descripción                                                                                                | Acceso / Protocolo                      | Rol en SembraData                                                                               |
+| :----------------------------------- | :--------------------------------------------------------------------------------------------------------- | :-------------------------------------  | :---------------------------------------------------------------------------------------------- |
+| **MinAgricultura / EVA**             | Evaluaciones Agropecuarias Municipales históricas (rendimiento en Ton/Ha y superficie en Ha, 2018–2024).   | Supabase (`rendimiento_historico`)      | **Observación Histórica Oficial**. Serie fundamental para el cálculo de tendencias ($N \ge 3$). |
+| **Cenicafé / Fedecacao / AGROSAVIA** | Manuales técnicos y requerimientos agroclimáticos óptimos de Café, Cacao y Granadilla.                     | Supabase (`crop_climate_requirements`)  | **Reglas Agronómicas Deterministas** (temperatura, precipitación, altitud y pH).                |
+| **ICE Futures / FRED / DANE SIPSA**  | Cotizaciones de referencia internacional (ICE US Cocoa CC / Coffee KC) y nacional mayorista DANE SIPSA.    | Endpoint / Supabase (`commodity_cache`) | **Mercado Agroclimático**. Precios de referencia con estrategia _Stale-While-Revalidate_.       |
 
 ---
 
 ## 2. Datos Meteorológicos y Satelitales
 
-| Fuente                   | Variables                                                                                                     | Frecuencia            | Caché / TTL                  |
-| :----------------------- | :------------------------------------------------------------------------------------------------------------ | :-------------------- | :--------------------------- |
-| **Open-Meteo API**       | Temperatura actual, humedad relativa, precipitación 7 días, velocidad de viento, radiación y balance hídrico. | Tiempo real / Horaria | Sin caché (consulta directa) |
-| **NASA POWER**           | Radiación solar diaria, evapotranspiración de referencia ($ET_0$), índices GDD y estrés térmico.              | Diaria                | Caché Supabase (7 días)      |
-| **IDEAM (datos.gov.co)** | Observaciones de estaciones meteorológicas oficiales en territorio santandereano.                             | Diaria                | Caché Supabase (24 horas)    |
+| Fuente                   | Variables                                                                                                     | Frecuencia            | Caché / TTL                                 |
+| :----------------------- | :------------------------------------------------------------------------------------------------------------ | :-------------------- | :------------------------------------------ |
+| **Open-Meteo API**       | Temperatura actual, humedad relativa, precipitación 7 días, velocidad de viento, radiación y balance hídrico. | Tiempo real / Horaria | Sin caché (consulta directa)                |
+| **NASA POWER**           | Radiación solar diaria, evapotranspiración de referencia ($ET_0$), índices GDD y estrés térmico (15 params).  | Diaria                | Caché Supabase (`nasa_power_cache`, 7 días) |
+| **IDEAM (datos.gov.co)** | Observaciones de estaciones meteorológicas oficiales en territorio santandereano.                             | Diaria                | Caché Supabase (`ideam_cache`, 24 horas)    |
 
 ---
 

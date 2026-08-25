@@ -66,16 +66,16 @@ Rangos óptimos y tolerancias agronómicas oficiales (Cenicafé / Fedecacao / AG
 
 ### Tabla: `rendimiento_historico`
 
-Observaciones agropecuarias oficiales recolectadas por EVA / MinAgricultura.
+Observaciones agropecuarias oficiales recolectadas por EVA / MinAgricultura (2018–2024, Migración 010) para municipios productores de Santander.
 
-| Columna              | Tipo               | Descripción                                 |
-| :------------------- | :----------------- | :------------------------------------------ |
-| `id`                 | `UUID` (PK)        | Identificador único                         |
-| `municipio_id`       | `VARCHAR(50)` (FK) | Relación con `municipios.id`                |
-| `cultivo_id`         | `VARCHAR(50)` (FK) | Relación con `cultivos.id`                  |
-| `anio`               | `INTEGER`          | Año calendario observado (2000..año actual) |
-| `rendimiento_ton_ha` | `NUMERIC(6,3)`     | Rendimiento observado (Ton/Ha)              |
-| `superficie_ha`      | `NUMERIC(10,2)`    | Área cosechada (Hectáreas)                  |
+| Columna              | Tipo               | Descripción                           |
+| :------------------- | :----------------- | :------------------------------------ |
+| `id`                 | `UUID` (PK)        | Identificador único                   |
+| `municipio_id`       | `VARCHAR(50)` (FK) | Relación con `municipios.id`          |
+| `cultivo_id`         | `VARCHAR(50)` (FK) | Relación con `cultivos.id`            |
+| `anio`               | `INTEGER`          | Año calendario observado (2018..2024) |
+| `rendimiento_ton_ha` | `NUMERIC(6,3)`     | Rendimiento observado (Ton/Ha)        |
+| `superficie_ha`      | `NUMERIC(10,2)`    | Área cosechada (Hectáreas)            |
 
 ---
 

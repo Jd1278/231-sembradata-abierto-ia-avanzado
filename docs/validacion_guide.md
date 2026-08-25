@@ -36,7 +36,7 @@ npm run typecheck
 # 2. Análisis estático de código y reglas de calidad
 npm run lint
 
-# 3. Ejecución de la suite completa de pruebas unitarias e integración (392 tests)
+# 3. Ejecución de la suite completa de pruebas unitarias e integración (424 tests / 55 suites)
 npm run test
 
 # 4. Pipeline de validación integral y compilación de producción Nitro SSR

@@ -53,7 +53,8 @@ Pronóstico:    Theil-Sen Robust Estimator con Intervalos L80/U80/L95/U95
 
 - **Sitio web:** [https://power.larc.nasa.gov](https://power.larc.nasa.gov)
 - **Endpoint utilizado:** `https://power.larc.nasa.gov/api/temporal/daily/point`
-- **Función en el proyecto:** Radiación solar, evapotranspiración de referencia ($ET_0$) e índices agroclimáticos.
+- **Parámetros agronómicos (15 oficiales):** `T2M, T2M_MAX, T2M_MIN, PRECTOTCORR, RH2M, WS2M, WS2M_MAX, WS2M_MIN, WD2M, ALLSKY_SFC_SW_DWN, EVPTRNS, T2MDEW, TS, ALLSKY_KT, ALLSKY_SFC_LW_DWN` (estrictamente ajustados al límite $\le 20$ de NASA POWER).
+- **Función en el proyecto:** Radiación solar diaria, evapotranspiración de referencia ($ET_0$), índices de radiación y balance agroclimático.
 
 ### 2.3 SoilGrids (ISRIC) — Propiedades Pedológicas
 
@@ -70,9 +71,17 @@ Pronóstico:    Theil-Sen Robust Estimator con Intervalos L80/U80/L95/U95
 
 ## 3. APIs de Datos de Mercado
 
-### 3.1 Commodity Forecast API
+### 3.1 Commodity Forecast API & Referencias de Mercado
 
-- **Función en el proyecto:** Cotizaciones internacionales de café y cacao con análisis de tendencia.
+- **Endpoint en vivo:** `https://forecast.untitledfinancial.com/forecast/commodity/{COFFEE|COCOA}`
+- **Instrumentos internacionales:**
+  - **Cacao:** ICE US Cocoa (CC) — Futuros de Nueva York en USD/MT.
+  - **Café:** ICE US Coffee C (KC) — Futuros de Nueva York en ¢/lb.
+- **Instrumento nacional:**
+  - **Granadilla:** Mercado nacional mayorista DANE / SIPSA (Centroabastos Bucaramanga).
+- **Estrategia de Resiliencia (_Stale-While-Revalidate_):**
+  - Si el proveedor en vivo entrega señales climáticas pero `currentPrice: null`, se fusionan las señales climáticas en vivo con la última cotización real en caché persistente (`commodity_cache` en Supabase / FRED / ICE).
+  - Cada commodity se consulta de manera independiente mediante `Promise.allSettled`.
 
 ---
 
@@ -80,12 +89,13 @@ Pronóstico:    Theil-Sen Robust Estimator con Intervalos L80/U80/L95/U95
 
 ### 4.1 Supabase (PostgreSQL + Edge Functions)
 
-- **PostgreSQL:** Base de datos relacional con Migraciones 001..009 y RLS Hardening.
+- **PostgreSQL:** Base de datos relacional con Migraciones 001..010 y RLS Hardening.
 - **Tablas principales:**
   - `municipios`: 87 municipios de Santander con altitud oficial y coordenadas.
   - `cultivos`: Café, Cacao, Granadilla.
   - `crop_climate_requirements`: Requerimientos óptimos oficiales (Cenicafé / Fedecacao / AGROSAVIA).
-  - `rendimiento_historico`: Observaciones reales oficiales de EVA / MinAgricultura.
+  - `rendimiento_historico`: Observaciones reales oficiales de EVA / MinAgricultura (2018–2024, Migración 010).
+  - `commodity_cache` / `commodity_prices`: Caché persistente de cotizaciones internacionales de referencia.
   - `predicciones_agroclimaticas`: Pronósticos estadísticos versionados con intervalos de predicción al 80% y 95%.
   - `data_quality_quarantine`: Registro de auditoría y aislamiento de anomalías.
   - `chat_conversations`: Historial de chat con acceso restringido a `service_role`.
