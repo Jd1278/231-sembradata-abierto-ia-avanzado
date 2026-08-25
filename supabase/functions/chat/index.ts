@@ -451,7 +451,7 @@ Deno.serve(async (req) => {
     const lon = muniProfile ? muniProfile.longitud : -73.12;
 
     const [ragResults, externalContext, historicalYield, prediction, cropReqs] = await Promise.all([
-      searchKnowledgeBase(message, 2),
+      searchKnowledgeBase(message, 2, undefined, { crop: rawCultivo, intent }),
       muniProfile
         ? getCurrentExternalContext(lat, lon)
         : Promise.resolve({

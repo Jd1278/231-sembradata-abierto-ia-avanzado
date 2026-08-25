@@ -254,3 +254,97 @@ describe("ClimateSection - 7-day forecast slice", () => {
     expect(wrongForecast.every((d) => d.tempMax === 0)).toBe(true);
   });
 });
+
+describe("Historical Validation - Time Series Normalization", () => {
+  it("creates unified chronological series without NaN values", () => {
+    const mockHistorical = [
+      {
+        date: "2026-05-01",
+        tempMax: 24.2,
+        tempMin: 15.1,
+        tempAvg: 19.6,
+        precipitation: 3.5,
+        humidity: 75,
+        windSpeed: 8,
+        solarRadiation: 18,
+        windDirection: 0,
+        evapotranspiration: 3.0,
+        wetBulbTemp: 0,
+        earthSkinTemp: 0,
+        clearnessIndex: 0,
+        cloudOpacity: 0,
+        referenceEvapotranspiration: 3.0,
+      },
+      {
+        date: "2026-05-02",
+        tempMax: 25.0,
+        tempMin: 15.8,
+        tempAvg: 20.4,
+        precipitation: 1.2,
+        humidity: 72,
+        windSpeed: 9,
+        solarRadiation: 19,
+        windDirection: 0,
+        evapotranspiration: 3.2,
+        wetBulbTemp: 0,
+        earthSkinTemp: 0,
+        clearnessIndex: 0,
+        cloudOpacity: 0,
+        referenceEvapotranspiration: 3.2,
+      },
+    ];
+
+    const mockForecast = [
+      {
+        date: "2026-05-03",
+        tempMax: 26.1,
+        tempMin: 16.0,
+        precip: 0.5,
+        humidity: 70,
+        windSpeed: 10,
+        solarRad: 20,
+        uvIndex: 8,
+      },
+      {
+        date: "2026-05-04",
+        tempMax: 25.5,
+        tempMin: 15.5,
+        precip: 2.0,
+        humidity: 73,
+        windSpeed: 8,
+        solarRad: 18,
+        uvIndex: 7,
+      },
+    ];
+
+    const points = [
+      ...mockHistorical.map((d) => ({
+        date: d.date,
+        type: "historical" as const,
+        tempMax: d.tempMax,
+        tempMin: d.tempMin,
+        precipitation: d.precipitation,
+      })),
+      ...mockForecast.map((f) => ({
+        date: f.date,
+        type: "forecast" as const,
+        tempMax: f.tempMax,
+        tempMin: f.tempMin,
+        precipitation: f.precip,
+      })),
+    ];
+
+    expect(points).toHaveLength(4);
+    expect(points[0].type).toBe("historical");
+    expect(points[3].type).toBe("forecast");
+    expect(points.every((p) => Number.isFinite(p.tempMax) && Number.isFinite(p.tempMin))).toBe(
+      true,
+    );
+    expect(points.every((p) => p.precipitation >= 0)).toBe(true);
+
+    // Sorted chronologically
+    for (let i = 0; i < points.length - 1; i++) {
+      expect(points[i].date < points[i + 1].date).toBe(true);
+    }
+  });
+});

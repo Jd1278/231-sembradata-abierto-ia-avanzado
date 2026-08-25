@@ -306,6 +306,7 @@ export function PredictionPanel({
                         lat={lat}
                         lng={lng}
                         crop={crop}
+                        forecastDaily={climate.dailyData}
                         forecastTemps={climate.dailyData.map((d) => ({
                           max: d.tempMax,
                           min: d.tempMin,

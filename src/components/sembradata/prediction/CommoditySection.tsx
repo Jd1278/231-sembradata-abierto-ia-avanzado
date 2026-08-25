@@ -131,13 +131,14 @@ export function CommoditySection({ activeCrop }: Props) {
       <Card className="rounded-2xl">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold">Mercado de Referencia</CardTitle>
-            <Badge variant="outline" className="text-[10px]">
-              Referencia SIPSA / DANE
+            <CardTitle className="text-sm font-semibold">Precio de Referencia Nacional</CardTitle>
+            <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
+              Referencia Nacional (DANE / SIPSA)
             </Badge>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Granadilla (Passiflora ligularis) · Comercialización Nacional
+            Granadilla (Passiflora ligularis) · Comercialización Nacional (Sin futuros
+            internacionales ICE)
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -207,10 +208,14 @@ export function CommoditySection({ activeCrop }: Props) {
             {active.status === "cached" && (
               <Badge
                 variant="outline"
-                className="text-[10px] gap-1 text-amber-700 border-amber-500/30"
+                className="text-[10px] gap-1 text-amber-700 dark:text-amber-300 border-amber-500/30"
               >
                 <Clock className="h-2.5 w-2.5" />
-                Caché
+                Fuente: caché (
+                {active.fetchedAt
+                  ? new Date(active.fetchedAt).toLocaleDateString("es-CO")
+                  : "reciente"}
+                )
               </Badge>
             )}
             <Badge
