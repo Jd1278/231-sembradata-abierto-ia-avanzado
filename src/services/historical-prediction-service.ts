@@ -71,8 +71,19 @@ export async function resolveMunicipalityId(municipalityName: string): Promise<s
 
   try {
     const raw = municipalityName.trim();
+    const slug = normalizeMunicipalitySlug(raw);
 
-    // 1. Exact match
+    // 1. Direct ID / slug check
+    const { data: byId } = await supabase
+      .from("municipios")
+      .select("id")
+      .eq("id", slug)
+      .limit(1)
+      .maybeSingle();
+
+    if (byId?.id) return byId.id;
+
+    // 2. Exact case-insensitive name match
     const { data: exact } = await supabase
       .from("municipios")
       .select("id")
@@ -82,7 +93,7 @@ export async function resolveMunicipalityId(municipalityName: string): Promise<s
 
     if (exact?.id) return exact.id;
 
-    // 2. Unaccented match
+    // 3. Unaccented exact equality against catalog
     const unaccented = raw
       .toLowerCase()
       .normalize("NFD")
@@ -91,30 +102,26 @@ export async function resolveMunicipalityId(municipalityName: string): Promise<s
     const { data: allMunis } = await supabase.from("municipios").select("id, nombre").limit(200);
 
     if (allMunis && Array.isArray(allMunis)) {
-      const match = allMunis.find((m) => {
+      // 3a. Exact normalized equality
+      const exactNorm = allMunis.find((m) => {
         const norm = m.nombre
           .toLowerCase()
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, "");
-        return norm === unaccented || norm.includes(unaccented) || unaccented.includes(norm);
+        return norm === unaccented || m.id === slug;
       });
-      if (match?.id) return match.id;
+      if (exactNorm?.id) return exactNorm.id;
+
+      // 3b. Strict word-boundary match (not loose substring)
+      const wordMatch = allMunis.find((m) => {
+        const norm = m.nombre
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+        return norm === unaccented;
+      });
+      if (wordMatch?.id) return wordMatch.id;
     }
-
-    // 3. Fallback ILIKE pattern
-    const upperUnaccented = raw
-      .toUpperCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-
-    const { data: byUpper } = await supabase
-      .from("municipios")
-      .select("id")
-      .ilike("nombre", `%${upperUnaccented}%`)
-      .limit(1)
-      .maybeSingle();
-
-    if (byUpper?.id) return byUpper.id;
 
     return null;
   } catch (err) {

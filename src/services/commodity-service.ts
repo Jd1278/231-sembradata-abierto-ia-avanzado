@@ -270,11 +270,24 @@ export class CommodityService {
 
     try {
       const forecast = await this.provider.fetchPrice(symbol);
+      const rawVal = forecast.currentPrice?.value;
+      if (!Number.isFinite(rawVal)) {
+        // If live price quote is missing, check persistent cache in Supabase
+        const cached = await getCachedCommodity<RawCommodityForecast>(symbol, { allowStale: true });
+        if (cached && Number.isFinite(cached.currentPrice?.value)) {
+          // Merge live forecast signals with verified cached reference price
+          const merged: RawCommodityForecast = {
+            ...forecast,
+            currentPrice: cached.currentPrice,
+          };
+          return this.mapToCommodityPrice(crop, merged, true);
+        }
+      }
       return this.mapToCommodityPrice(crop, forecast, false);
     } catch (err) {
       console.warn(`[Commodity] Failed to fetch ${symbol}, checking cache fallback:`, err);
       const cached = await getCachedCommodity<RawCommodityForecast>(symbol);
-      if (cached) {
+      if (cached && Number.isFinite(cached.currentPrice?.value)) {
         return this.mapToCommodityPrice(crop, cached, true);
       }
       return buildUnavailableCommodity(

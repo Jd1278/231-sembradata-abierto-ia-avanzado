@@ -117,7 +117,10 @@ export async function getCachedNasaPower(
 // ============================================================
 // Commodity Cache (Read-Only Client)
 // ============================================================
-export async function getCachedCommodity<T>(symbol: string): Promise<T | null> {
+export async function getCachedCommodity<T>(
+  symbol: string,
+  options?: { allowStale?: boolean },
+): Promise<T | null> {
   if (!isSupabaseConfigured()) return null;
 
   try {
@@ -128,7 +131,7 @@ export async function getCachedCommodity<T>(symbol: string): Promise<T | null> {
       .maybeSingle();
 
     if (error || !data) return null;
-    if (!isFresh(data.fetched_at, CACHE_TTL.commodity)) return null;
+    if (!options?.allowStale && !isFresh(data.fetched_at, CACHE_TTL.commodity)) return null;
 
     return data.payload as T;
   } catch {
