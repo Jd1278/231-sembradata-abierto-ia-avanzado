@@ -219,15 +219,19 @@ export function HistoricalValidation({
 
   const getX = (index: number) => {
     const count = Math.max(seriesPoints.length - 1, 1);
-    return PAD.left + (index / count) * (W - PAD.left - PAD.right);
+    const safeIdx = Math.max(0, Math.min(count, index));
+    const x = PAD.left + (safeIdx / count) * (W - PAD.left - PAD.right);
+    return Number.isFinite(x) ? x : PAD.left;
   };
 
   const getY = (val: number) => {
-    const ratio = (val - minTemp) / tempSpan;
-    return H - PAD.bottom - ratio * (H - PAD.top - PAD.bottom);
+    if (!Number.isFinite(val) || tempSpan <= 0) return H / 2;
+    const clamped = Math.max(minTemp, Math.min(maxTemp, val));
+    const ratio = (clamped - minTemp) / tempSpan;
+    const y = H - PAD.bottom - ratio * (H - PAD.top - PAD.bottom);
+    return Number.isFinite(y) ? y : H / 2;
   };
 
-  // Build SVG Path segments
   const histIndices = seriesPoints
     .map((p, i) => (p.type === "historical" ? i : -1))
     .filter((i) => i !== -1);
@@ -236,8 +240,11 @@ export function HistoricalValidation({
     .filter((i) => i !== -1);
 
   const buildPath = (indices: number[], key: "tempMax" | "tempMin") => {
-    if (indices.length === 0) return "";
-    return indices
+    const validIndices = indices.filter(
+      (idx) => idx >= 0 && idx < seriesPoints.length && Number.isFinite(seriesPoints[idx]?.[key]),
+    );
+    if (validIndices.length === 0) return "";
+    return validIndices
       .map(
         (idx, i) =>
           `${i === 0 ? "M" : "L"} ${getX(idx).toFixed(1)},${getY(seriesPoints[idx][key]).toFixed(1)}`,

@@ -95,7 +95,7 @@ export class HttpCommodityPriceProvider implements CommodityPriceProvider {
     }
 
     const data = (await res.json()) as RawCommodityForecast;
-    if (!Number.isFinite(data?.currentPrice?.value) || !data.signal || !data.recommendation) {
+    if (!data || !data.signal || !data.recommendation) {
       throw new Error(`Invalid commodity API payload for ${symbol}`);
     }
 
@@ -187,14 +187,21 @@ export function normalizePerKg(value: number | null, unit: string): number | nul
     normalized === "cents/lb" ||
     normalized === "¢/lb" ||
     normalized.includes("¢/lb") ||
-    normalized.includes("cents/lb")
+    normalized.includes("cents/lb") ||
+    normalized.includes("¢/pound")
   ) {
     return +(value / 100 / KG_PER_LB).toFixed(4);
   }
-  if (normalized === "lb" || normalized.includes("/lb") || normalized.includes("pound")) {
+  if (
+    normalized === "usd/lb" ||
+    normalized === "$/lb" ||
+    normalized === "lb" ||
+    normalized === "usd/pound" ||
+    normalized === "pound"
+  ) {
     return +(value / KG_PER_LB).toFixed(4);
   }
-  if (normalized === "kg") {
+  if (normalized === "kg" || normalized === "usd/kg" || normalized === "$/kg") {
     return +value.toFixed(4);
   }
   return null;
@@ -210,7 +217,7 @@ export class CommodityService {
   ): CommodityPrice {
     const rawVal = forecast.currentPrice?.value;
     if (!Number.isFinite(rawVal)) {
-      throw new Error(`Invalid price value for ${crop}: ${rawVal}`);
+      throw new Error(`Cotización no disponible para ${crop}`);
     }
 
     const isCocoa = crop === "cacao";
@@ -221,10 +228,10 @@ export class CommodityService {
       label: isCocoa
         ? "Cacao en Grano (Referencia ICE)"
         : "Café Arábica Verde Lavado (Referencia ICE)",
-      price: rawVal,
+      price: rawVal as number,
       unit: quoteUnit,
       currency: "USD",
-      normalizedPricePerKg: normalizePerKg(rawVal, quoteUnit),
+      normalizedPricePerKg: normalizePerKg(rawVal as number, quoteUnit),
       market: "ICE Futures U.S. (Nueva York)",
       instrument: isCocoa ? "ICE US Cocoa (CC)" : "ICE US Coffee C (KC)",
       contract: isCocoa ? "Cacao Grano Grado 1" : "Café Arábica Lavado Suave",
