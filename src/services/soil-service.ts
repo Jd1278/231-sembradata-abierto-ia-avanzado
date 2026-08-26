@@ -13,7 +13,11 @@ export interface SoilData {
   erosionRisk: string;
   landUse: string;
   carbonStock: number;
+  sourceType: "measured" | "estimated" | "unavailable";
+  sourceDescription?: string;
 }
+
+import { rateLimitedFetch } from "./rate-limiter";
 
 const SOILGRIDS_URL = "https://rest.isric.org/soilgrids/v2.0/properties/query";
 
@@ -74,7 +78,7 @@ export async function fetchSoilData(
       value: "mean",
     });
 
-    const res = await fetch(`${SOILGRIDS_URL}?${params}`);
+    const res = await rateLimitedFetch("soilgrids", `${SOILGRIDS_URL}?${params}`);
     if (!res.ok) throw new Error(`Soil API error: ${res.status}`);
     const data = await res.json();
 
@@ -109,6 +113,8 @@ export async function fetchSoilData(
       erosionRisk: clay < 15 ? "Alta" : clay > 30 ? "Baja" : "Media",
       landUse: mapLandUse(ph, texture),
       carbonStock: +(soc * 10).toFixed(0),
+      sourceType: "measured",
+      sourceDescription: "Perfil edáfico medido en SoilGrids (ISRIC 250m)",
     };
   } catch (err) {
     console.warn("SoilGrids API fallback for", lat, lng, err);
@@ -164,5 +170,8 @@ function generateFallbackSoil(lat: number, lng: number): SoilData {
     erosionRisk: est.clay < 15 ? "Alta" : est.clay > 30 ? "Baja" : "Media",
     landUse: mapLandUse(est.ph, mapTexture(est.clay, est.sand, silt)),
     carbonStock: +(est.om * 10).toFixed(0),
+    sourceType: "estimated",
+    sourceDescription:
+      "Propiedades edáficas estimadas por zonificación agroecológica regional (OAT). No es una medición directa in-situ.",
   };
 }

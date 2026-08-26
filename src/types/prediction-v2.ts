@@ -1,4 +1,5 @@
 import type { CropKey } from "@/types/crops";
+import { recommendAlternativeCrops } from "@/services/crop-recommendations";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -34,6 +35,13 @@ export interface AlternativeCrop {
   reason: string;
   estimatedYield: string;
   bestSeason: string;
+  score?: number;
+  compatibility?: {
+    temperature: number;
+    precipitation: number;
+    humidity: number;
+    altitude: number;
+  };
 }
 
 export interface ViabilityResult {
@@ -91,11 +99,11 @@ interface CropProfile {
 const CROP_PROFILES: Record<CropKey, CropProfile> = {
   cacao: {
     label: "Cacao",
-    phRange: [5.0, 7.0],
-    tempRange: [20, 28],
+    phRange: [6.0, 7.5],
+    tempRange: [21, 32],
     precipRange: [1500, 2500],
     humRange: [70, 90],
-    altRange: [0, 1500],
+    altRange: [0, 800],
     weights: {
       ph: 12,
       temp: 15,
@@ -110,7 +118,7 @@ const CROP_PROFILES: Record<CropKey, CropProfile> = {
     pestConditions: {
       fungalHumidityThreshold: 80,
       fungalTempRange: [22, 28],
-      droughtPrecipThreshold: 60,
+      droughtPrecipThreshold: 2,
       frostTempThreshold: 10,
     },
     seasonalStages: [
@@ -131,8 +139,8 @@ const CROP_PROFILES: Record<CropKey, CropProfile> = {
   cafe: {
     label: "Café",
     phRange: [5.5, 6.5],
-    tempRange: [17, 24],
-    precipRange: [1500, 2200],
+    tempRange: [18, 22],
+    precipRange: [1500, 2000],
     humRange: [60, 80],
     altRange: [1200, 1800],
     weights: {
@@ -149,7 +157,7 @@ const CROP_PROFILES: Record<CropKey, CropProfile> = {
     pestConditions: {
       fungalHumidityThreshold: 75,
       fungalTempRange: [18, 24],
-      droughtPrecipThreshold: 80,
+      droughtPrecipThreshold: 3,
       frostTempThreshold: 5,
     },
     seasonalStages: [
@@ -169,11 +177,11 @@ const CROP_PROFILES: Record<CropKey, CropProfile> = {
   },
   granadilla: {
     label: "Granadilla",
-    phRange: [5.5, 6.5],
-    tempRange: [18, 24],
-    precipRange: [1200, 2000],
+    phRange: [5.5, 6.8],
+    tempRange: [15, 20],
+    precipRange: [1000, 2000],
     humRange: [65, 85],
-    altRange: [1200, 2000],
+    altRange: [1800, 2800],
     weights: {
       ph: 10,
       temp: 13,
@@ -188,7 +196,7 @@ const CROP_PROFILES: Record<CropKey, CropProfile> = {
     pestConditions: {
       fungalHumidityThreshold: 78,
       fungalTempRange: [20, 26],
-      droughtPrecipThreshold: 70,
+      droughtPrecipThreshold: 2.3,
       frostTempThreshold: 8,
     },
     seasonalStages: [
@@ -451,6 +459,18 @@ export function evaluateViability(
   month: number = new Date().getMonth() + 1,
   hasRealData: boolean = true,
 ): ViabilityResult {
+  // Guard against NaN/Infinity from corrupt API data
+  const safe = (v: number, fallback: number) => (Number.isFinite(v) ? v : fallback);
+
+  soilPh = safe(soilPh, 6.5);
+  soilOrganicMatter = safe(soilOrganicMatter, 3.0);
+  temperature = safe(temperature, 22);
+  precipitation = safe(precipitation, 5);
+  humidity = safe(humidity, 70);
+  windSpeed = safe(windSpeed, 10);
+  solarRadiation = safe(solarRadiation, 15);
+  altitude = safe(altitude, 1000);
+
   const profile = CROP_PROFILES[crop];
   const factors: FactorDetail[] = [];
   let weightedScore = 0;
@@ -527,7 +547,7 @@ export function evaluateViability(
 
   // ---- Precipitation ----
   const [pMin, pMax] = profile.precipRange;
-  const annualPrecip = precipitation * 12;
+  const annualPrecip = precipitation * 365;
   const precipOk = annualPrecip >= pMin && annualPrecip <= pMax;
   const precipScore = precipOk
     ? 1.0
@@ -536,7 +556,7 @@ export function evaluateViability(
       : Math.max(0, 1 - (annualPrecip - pMax) / (pMax * 0.5));
   factors.push({
     variable: "Precipitación",
-    value: `${precipitation.toFixed(0)} mm/mes (~${Math.round(annualPrecip)} mm/año)`,
+    value: `${precipitation.toFixed(1)} mm/día (~${Math.round(annualPrecip)} mm/año)`,
     status: precipOk ? "favorable" : precipScore > 0.6 ? "neutral" : "unfavorable",
     impact: annualPrecip < pMin * 0.6 || annualPrecip > pMax * 1.3 ? "alto" : "medio",
     explanation: precipOk
@@ -558,7 +578,7 @@ export function evaluateViability(
     variable: "Humedad relativa",
     value: `${humidity.toFixed(0)}%`,
     status: humOk ? "favorable" : humScore > 0.6 ? "neutral" : "unfavorable",
-    impact: "bajo",
+    impact: Math.abs(humidity - (hMin + hMax) / 2) > 20 ? "alto" : "medio",
     explanation: humOk
       ? `Humedad ${humidity.toFixed(0)}% adecuada para el cultivo.`
       : `Humedad ${humidity.toFixed(0)}% fuera del rango ideal (${hMin}-${hMax}%).`,
@@ -604,14 +624,14 @@ export function evaluateViability(
   weightedScore += windScore * profile.weights.wind;
   totalWeight += profile.weights.wind;
 
-  // ---- Solar radiation ----
-  const solarOk = solarRadiation > 15;
-  const solarScore = solarOk ? 1.0 : Math.max(0, solarRadiation / 15);
+  // ---- Solar radiation (MJ/m²/day) ----
+  const solarOk = solarRadiation > 12;
+  const solarScore = solarOk ? 1.0 : Math.max(0, solarRadiation / 12);
   factors.push({
     variable: "Radiación solar",
-    value: `${solarRadiation.toFixed(0)} W/m²`,
-    status: solarOk ? "favorable" : "neutral",
-    impact: "bajo",
+    value: `${solarRadiation.toFixed(1)} MJ/m²/día`,
+    status: solarOk ? "favorable" : solarScore > 0.5 ? "neutral" : "unfavorable",
+    impact: solarRadiation < 8 ? "alto" : "bajo",
     explanation: solarOk
       ? "Radiación solar suficiente para fotosíntesis productiva."
       : "Radiación solar baja, puede limitar la productividad.",
@@ -650,7 +670,12 @@ export function evaluateViability(
   const recommendations = generateRecommendations(crop, factors, pestRisk, seasonal);
 
   // ---- Alternatives ----
-  const alternatives = generateAlternatives(crop);
+  const alternatives = generateAlternatives(crop, {
+    temperature,
+    precipitation,
+    humidity,
+    altitude,
+  });
 
   return {
     score: finalScore,
@@ -748,69 +773,19 @@ function generateRecommendations(
 /*  Alternative crops (unchanged)                                      */
 /* ------------------------------------------------------------------ */
 
-const ALTERNATIVES: Record<CropKey, AlternativeCrop[]> = {
-  cacao: [
+function generateAlternatives(
+  crop: CropKey,
+  context: { temperature: number; precipitation: number; humidity: number; altitude: number },
+): AlternativeCrop[] {
+  // Kept local to avoid a circular type dependency; the recommendation service owns the catalogue.
+  // The legacy static list is intentionally no longer used for live analyses.
+  return recommendAlternativeCrops(
     {
-      name: "Café",
-      reason: "Tolera mejor altitudes intermedias",
-      estimatedYield: "1.2-1.8 Ton/Ha",
-      bestSeason: "Marzo-Abril",
+      temperature: context.temperature,
+      precipitationDaily: context.precipitation,
+      humidity: context.humidity,
+      altitude: context.altitude,
     },
-    {
-      name: "Plátano",
-      reason: "Cultivo de rápido retorno, tolera diversas condiciones",
-      estimatedYield: "15-25 Ton/Ha",
-      bestSeason: "Todo el año",
-    },
-    {
-      name: "Yuca",
-      reason: "Resistente a sequía, bajo mantenimiento",
-      estimatedYield: "10-15 Ton/Ha",
-      bestSeason: "Todo el año",
-    },
-  ],
-  cafe: [
-    {
-      name: "Cacao",
-      reason: "Tolera zonas más bajas y cálidas",
-      estimatedYield: "0.85-1.2 Ton/Ha",
-      bestSeason: "Abril-Mayo",
-    },
-    {
-      name: "Aguacate",
-      reason: "Alto valor comercial, requerimientos similares",
-      estimatedYield: "12-18 Ton/Ha",
-      bestSeason: "Marzo-Junio",
-    },
-    {
-      name: "Guayaba",
-      reason: "Frutal tropical de baja altitud",
-      estimatedYield: "15-20 Ton/Ha",
-      bestSeason: "Todo el año",
-    },
-  ],
-  granadilla: [
-    {
-      name: "Maracuyá",
-      reason: "Misma familia, mayor resistencia a plagas",
-      estimatedYield: "15-20 Ton/Ha",
-      bestSeason: "Marzo-Junio",
-    },
-    {
-      name: "Lulo",
-      reason: "Frutal andino, buena adaptación",
-      estimatedYield: "10-15 Ton/Ha",
-      bestSeason: "Abril-Junio",
-    },
-    {
-      name: "Tomate de árbol",
-      reason: "Cultivo emergente, alto valor nutricional",
-      estimatedYield: "8-12 Ton/Ha",
-      bestSeason: "Todo el año",
-    },
-  ],
-};
-
-function generateAlternatives(crop: CropKey): AlternativeCrop[] {
-  return ALTERNATIVES[crop] ?? [];
+    CROP_PROFILES[crop].label,
+  );
 }

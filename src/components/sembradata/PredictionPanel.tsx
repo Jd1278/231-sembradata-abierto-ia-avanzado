@@ -1,21 +1,20 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CROP_DATA } from "@/components/sembradata/data";
 import type { CropKey } from "@/types/crops";
 import { fetchCurrentClimate, type ClimateData } from "@/services/climate-api";
+import type { MunicipalityClimateState } from "@/services/climate-state";
 import { fetchSoilData, type SoilData } from "@/services/soil-service";
 import { evaluateViability, type ViabilityResult } from "@/types/prediction-v2";
-import { MONTH_LABELS } from "@/services/temporal-optimizer";
+import { MONTH_LABELS, getOptimalPastDays } from "@/services/temporal-optimizer";
 import { SoilSection } from "./prediction/SoilSection";
 import { ClimateSection } from "./prediction/ClimateSection";
 import { ViabilitySection } from "./prediction/ViabilitySection";
 import { RecommendationsSection } from "./prediction/RecommendationsSection";
 import { SectionErrorBoundary } from "./SectionErrorBoundary";
 import { saveAnalysis } from "@/services/analysis-history";
-
-import { getOptimalPastDays } from "../../services/temporal-optimizer";
 
 const HistoricalValidation = lazy(() =>
   import("./prediction/HistoricalValidation").then((m) => ({ default: m.HistoricalValidation })),
@@ -50,6 +49,8 @@ interface Props {
   altitude?: number;
   departamento?: string;
   month?: string;
+  sharedClimate?: ClimateData | null;
+  climateState?: MunicipalityClimateState | null;
   onClose: () => void;
 }
 
@@ -61,6 +62,8 @@ export function PredictionPanel({
   altitude = 500,
   departamento,
   month,
+  sharedClimate = null,
+  climateState = null,
   onClose,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -68,7 +71,8 @@ export function PredictionPanel({
   const [soil, setSoil] = useState<SoilData | null>(null);
   const [climate, setClimate] = useState<ClimateData | null>(null);
   const [viability, setViability] = useState<ViabilityResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [climateError, setClimateError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const panel = panelRef.current;
@@ -112,60 +116,102 @@ export function PredictionPanel({
 
     async function load() {
       setLoading(true);
-      setError(null);
-      try {
-        // Fetch elevation from Open-Meteo
-        const elevRes = await fetch(
-          `https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lng}`,
-        ).catch(() => null);
-        const elevData = elevRes ? await elevRes.json() : null;
-        const elev = elevData?.elevation?.[0] ?? altitude;
+      setClimateError(null);
 
-        // Fetch soil and climate data in parallel
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        if (!cancelled) {
+          setClimateError(
+            "Se requiere conexión a internet para consultar datos de satélite, suelo y estaciones agroclimáticas.",
+          );
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
         const pastDays = getOptimalPastDays(crop);
-        const [soilData, climateData] = await Promise.all([
+
+        // 1. Fetch Elevation, Soil, and Climate in Parallel with Timeouts
+        const elevController = new AbortController();
+        const elevTimer = setTimeout(() => elevController.abort(), 6000);
+
+        const [elevResSettled, soilResult, climateResult] = await Promise.allSettled([
+          fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lng}`, {
+            signal: elevController.signal,
+          }).catch(() => null),
           fetchSoilData(lat, lng),
-          fetchCurrentClimate(lat, lng, pastDays),
+          sharedClimate ? Promise.resolve(sharedClimate) : fetchCurrentClimate(lat, lng, pastDays),
         ]);
+        clearTimeout(elevTimer);
 
         if (cancelled) return;
+
+        // Resolve Elevation Safely
+        let resolvedElev = altitude;
+        if (
+          elevResSettled.status === "fulfilled" &&
+          elevResSettled.value &&
+          elevResSettled.value.ok
+        ) {
+          try {
+            const elevJson = await elevResSettled.value.json();
+            if (Array.isArray(elevJson?.elevation) && Number.isFinite(elevJson.elevation[0])) {
+              resolvedElev = elevJson.elevation[0];
+            }
+          } catch {
+            // fallback to municipal altitude
+          }
+        }
+
+        const soilData = soilResult.status === "fulfilled" ? soilResult.value : null;
+        const climateData = climateResult.status === "fulfilled" ? climateResult.value : null;
 
         setSoil(soilData);
         setClimate(climateData);
 
-        const monthIndex = month ? MONTH_LABELS.indexOf(month) : -1;
-        const currentMonth = monthIndex >= 0 ? monthIndex + 1 : new Date().getMonth() + 1;
+        if (!climateData) {
+          if (!cancelled) {
+            setClimateError("No se pudieron obtener datos climáticos en tiempo real.");
+          }
+        } else {
+          const monthIndex = month ? MONTH_LABELS.indexOf(month) : -1;
+          const currentMonth = monthIndex >= 0 ? monthIndex + 1 : new Date().getMonth() + 1;
 
-        const v = evaluateViability(
-          crop,
-          soilData.ph,
-          soilData.organicMatter,
-          soilData.texture,
-          climateData.temperature,
-          climateData.precipitation,
-          climateData.humidity,
-          climateData.windSpeed,
-          climateData.solarRadiation,
-          elev,
-          currentMonth,
-          !!climateData && !!soilData,
-        );
+          const isSoilMeasured = soilData?.sourceType === "measured";
 
-        if (!cancelled) setViability(v);
+          const v = evaluateViability(
+            crop,
+            soilData?.ph ?? 6.5,
+            soilData?.organicMatter ?? 3.0,
+            soilData?.texture ?? "Franco",
+            climateData.temperature,
+            climateData.precipitation,
+            climateData.humidity,
+            climateData.windSpeed,
+            climateData.solarRadiation,
+            resolvedElev,
+            currentMonth,
+            isSoilMeasured,
+          );
 
-        saveAnalysis(municipio, departamento ?? "", crop, lat, lng, v).catch(() => {});
+          if (!cancelled) {
+            setViability(v);
+            saveAnalysis(municipio, departamento ?? "", crop, lat, lng, v).catch(() => {});
+          }
+        }
       } catch (err) {
-        console.warn("PredictionPanel load error:", err);
-        if (!cancelled) setError("Error al cargar datos de predicción");
+        console.warn("[PredictionPanel] Load error:", err);
+        if (!cancelled) setClimateError("Error al cargar datos agroclimáticos.");
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
+
     load();
     return () => {
       cancelled = true;
     };
-  }, [lat, lng, crop, altitude, municipio, departamento, month]);
+  }, [lat, lng, crop, altitude, municipio, departamento, month, sharedClimate, retryCount]);
 
   return (
     <div
@@ -199,81 +245,118 @@ export function PredictionPanel({
               Analizando condiciones agroclimáticas...
             </p>
           </div>
-        ) : error ? (
-          <Card className="rounded-2xl">
-            <CardContent className="py-10 text-center">
-              <p className="text-sm text-destructive">{error}</p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Verifica tu conexión a internet e intenta de nuevo.
-              </p>
-            </CardContent>
-          </Card>
         ) : (
-          <>
-            <div aria-live="polite">
-              {viability && (
-                <SectionErrorBoundary sectionName="Evaluación de viabilidad">
-                  <ViabilitySection
-                    viable={viability.viable}
-                    score={viability.score}
-                    factors={viability.factors}
-                    pestRisk={viability.pestRisk}
-                    seasonalNote={viability.seasonalNote}
-                    confidence={viability.confidence}
-                  />
-                </SectionErrorBoundary>
-              )}
-              {climate && (
-                <SectionErrorBoundary sectionName="Clima en tiempo real">
-                  <ClimateSection climate={climate} />
-                </SectionErrorBoundary>
-              )}
-              {climate && (
-                <SectionErrorBoundary sectionName="Validación histórica">
-                  <Suspense fallback={<SectionLoader />}>
-                    <HistoricalValidation
-                      lat={lat}
-                      lng={lng}
-                      crop={crop}
-                      forecastTemps={climate.dailyData.map((d) => ({
-                        max: d.tempMax,
-                        min: d.tempMin,
-                      }))}
-                      forecastPrecip={climate.dailyData.map((d) => d.precip)}
+          <div aria-live="polite" className="space-y-4">
+            {/* Viability & Climate Section or Climate Error Card */}
+            {climateError ? (
+              <Card className="rounded-2xl border-destructive/30 bg-destructive/5">
+                <CardContent className="py-6 text-center flex flex-col items-center gap-2">
+                  <AlertCircle className="h-6 w-6 text-destructive" />
+                  <p className="text-xs font-semibold text-destructive">{climateError}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    El cálculo de viabilidad requiere clima en vivo. Las demás secciones continúan
+                    disponibles.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setClimateError(null);
+                      setRetryCount((c) => c + 1);
+                    }}
+                    className="mt-1 h-7 rounded-lg text-xs"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1.5" />
+                    Reintentar clima
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {viability && (
+                  <SectionErrorBoundary sectionName="Evaluación de viabilidad">
+                    <ViabilitySection
+                      viable={viability.viable}
+                      score={viability.score}
+                      factors={viability.factors}
+                      pestRisk={viability.pestRisk}
+                      seasonalNote={viability.seasonalNote}
+                      confidence={viability.confidence}
                     />
-                  </Suspense>
-                </SectionErrorBoundary>
-              )}
-              {soil && (
-                <SectionErrorBoundary sectionName="Propiedades del suelo">
-                  <SoilSection soil={soil} crop={crop} />
-                </SectionErrorBoundary>
-              )}
-              <SectionErrorBoundary sectionName="Estación IDEAM">
-                <Suspense fallback={<SectionLoader />}>
-                  <IdeamStationSection lat={lat} lng={lng} departamento={departamento} />
-                </Suspense>
+                    {climateState && (
+                      <p className="mt-2 text-[10px] text-muted-foreground">
+                        Estado climático del mapa: {climateState.level} ({climateState.score}/100),
+                        calculado con la misma serie climática.
+                      </p>
+                    )}
+                  </SectionErrorBoundary>
+                )}
+
+                {climate && (
+                  <SectionErrorBoundary sectionName="Clima en tiempo real">
+                    <ClimateSection climate={climate} />
+                  </SectionErrorBoundary>
+                )}
+
+                {climate && (
+                  <SectionErrorBoundary sectionName="Validación histórica">
+                    <Suspense fallback={<SectionLoader />}>
+                      <HistoricalValidation
+                        lat={lat}
+                        lng={lng}
+                        crop={crop}
+                        forecastDaily={climate.dailyData}
+                        forecastTemps={climate.dailyData.map((d) => ({
+                          max: d.tempMax,
+                          min: d.tempMin,
+                        }))}
+                        forecastPrecip={climate.dailyData.map((d) => d.precip)}
+                      />
+                    </Suspense>
+                  </SectionErrorBoundary>
+                )}
+              </>
+            )}
+
+            {/* Independent Soil Section */}
+            {soil && (
+              <SectionErrorBoundary sectionName="Propiedades del suelo">
+                <SoilSection soil={soil} crop={crop} />
               </SectionErrorBoundary>
-              <SectionErrorBoundary sectionName="NDVI — Vegetación">
-                <Suspense fallback={<SectionLoader />}>
-                  <NdviSection lat={lat} lng={lng} />
-                </Suspense>
+            )}
+
+            {/* Independent IDEAM Station Section */}
+            <SectionErrorBoundary sectionName="Estación IDEAM">
+              <Suspense fallback={<SectionLoader />}>
+                <IdeamStationSection lat={lat} lng={lng} departamento={departamento} />
+              </Suspense>
+            </SectionErrorBoundary>
+
+            {/* Independent NDVI Section */}
+            <SectionErrorBoundary sectionName="NDVI — Vegetación">
+              <Suspense fallback={<SectionLoader />}>
+                <NdviSection lat={lat} lng={lng} />
+              </Suspense>
+            </SectionErrorBoundary>
+
+            {/* Recommendations Section */}
+            {viability && (
+              <SectionErrorBoundary sectionName="Recomendaciones">
+                <RecommendationsSection
+                  recommendations={viability.recommendations}
+                  alternatives={viability.alternatives}
+                />
               </SectionErrorBoundary>
-              {viability && (
-                <SectionErrorBoundary sectionName="Recomendaciones">
-                  <RecommendationsSection
-                    recommendations={viability.recommendations}
-                    alternatives={viability.alternatives}
-                  />
-                </SectionErrorBoundary>
-              )}
-              <SectionErrorBoundary sectionName="Precios internacionales">
-                <Suspense fallback={<SectionLoader />}>
-                  <CommoditySection activeCrop={crop} />
-                </Suspense>
-              </SectionErrorBoundary>
-            </div>
-          </>
+            )}
+
+            {/* Independent International Commodity Market Section */}
+            <SectionErrorBoundary sectionName="Precios internacionales">
+              <Suspense fallback={<SectionLoader />}>
+                <CommoditySection activeCrop={crop} />
+              </Suspense>
+            </SectionErrorBoundary>
+          </div>
         )}
       </div>
     </div>

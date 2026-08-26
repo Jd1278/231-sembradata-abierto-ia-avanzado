@@ -1,0 +1,27 @@
+# ============================================================
+# SEMBRADATA — Supabase Configuration File
+# Project: 231-sembradata-abierto-ia-avanzado
+# ============================================================
+
+project_id = "hhnbaxwbeywyriigcwav"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[functions.chat]
+verify_jwt = false
+
+[functions.gemini-assessment]
+verify_jwt = false
+
+[functions.cache-cleanup]
+verify_jwt = true

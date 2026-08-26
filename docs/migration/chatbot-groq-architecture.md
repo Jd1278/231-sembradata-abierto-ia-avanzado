@@ -1,137 +1,85 @@
-# Chatbot — Arquitectura con Groq (Llama 3.1 8B) + RAG
+# Arquitectura del Chatbot Agroclimático — Groq (`openai/gpt-oss-20b`) + Motor Determinista + RAG
 
-## Estado Actual (Julio 2026)
+Documentación técnica del asistente inteligente conversacional trazable de SembraData.
 
-El chatbot usa clasificador heurístico de intenciones + extracción de entidades + contexto RAG sobre la base de conocimiento local, con respuesta generada por **Groq Llama 3.1 8B** desplegado como **Supabase Edge Function**. No depende de n8n ni de orquestadores externos.
+---
 
-## Arquitectura
+## 1. Visión General de la Arquitectura
 
-```
-Usuario → ChatbotPanel → Edge Function `chat` (Supabase)
-                            │
-                ┌───────────┴───────────────────┐
-                │                               │
-        classifyIntent()                 extractEntities()
-        (heurístico, intent-classifier.ts)  (regex, entity-extractor.ts)
-                │                               │
-                └───────────┴─────┬─────────────┘
-                                  │
-                         buildRagContext()
-                         (chatbot-rag.ts +
-                          knowledge-base.ts,
-                          50+ entradas)
-                                  │
-                          Groq Llama 3.1 8B
-                          (API compatible con OpenAI,
-                           GROQ_API_KEY en Supabase)
-                                  │
-                            Respuesta + fuentes
-                            (contexto de conocimiento)
-```
+El chatbot de SembraData opera como una **Edge Function en Deno** (`supabase/functions/chat/index.ts`) bajo una arquitectura determinista orientada a la **prevención absoluta de alucinaciones** y a la **trazabilidad fáctica**:
 
-## Puntos de Integración
+```mermaid
+flowchart TD
+    User([Usuario en ChatbotPanel]) -->|POST /functions/v1/chat con requestId| EdgeFunc[Supabase Edge Function: chat]
 
-### 1. Supabase Edge Function `chat`
+    subgraph ServerSidePipeline["Pipeline Server-Side en Deno"]
+        EdgeFunc --> RateLimit[Control de Tasa y Validación CORS]
+        RateLimit --> MemLoad[Recuperación de Memoria Previa sin Race Conditions]
+        MemLoad --> IntentExtract[Clasificación de Intención + Extracción de Municipio/Cultivo]
 
-- **Archivo:** `supabase/functions/chat/index.ts`
-- **Invocación:** desde el frontend vía `@supabase/supabase-js` con la anon key
-- **Lenguaje:** Deno
-- **Secreto:** `GROQ_API_KEY` (configurado en el dashboard de Supabase, nunca en el frontend)
-- **Ruta secundaria:** `supabase/functions/cache-cleanup` — limpieza de caché expirado
+        IntentExtract --> GeoCheck{¿Municipio en Santander?}
+        GeoCheck -->|No / Fuera de Santander| OutOfScope[Rechazo Geográfico Seguro con Sugerencias]
 
-### 2. Payload que recibe la Edge Function
+        GeoCheck -->|Sí / Santander Válido| DetEngine[Ejecución de Herramientas Deterministas]
 
-```json
-{
-  "message": "texto de la consulta del usuario",
-  "history": [
-    { "role": "user", "content": "..." },
-    { "role": "assistant", "content": "..." }
-  ],
-  "knowledgeContext": {
-    "entries": [
-      {
-        "question": "¿Cuándo sembrar cacao?",
-        "answer": "La época...",
-        "category": "siembra",
-        "score": 12.5
-      }
-    ]
-  }
-}
+        DetEngine --> DBData[Consultas Supabase: municipios, rendimiento_historico, predicciones, requirements]
+        DetEngine --> LiveAPIs[Open-Meteo Clima 7d + SoilGrids ISRIC]
+
+        DBData & LiveAPIs --> FactsBundle[Generación de Hechos Verificados: verifiedNumbers]
+        FactsBundle --> LocalRAG[RAG Semántico: Umbral Similitud >= 3.0]
+
+        LocalRAG --> LLMPrompt[Invocación a Groq Cloud con openai/gpt-oss-20b en JSON Mode]
+        LLMPrompt --> ZodParse[Parseo Estricto con ChatbotResponseSchema]
+
+        ZodParse --> Sanitizer[Sanitizador: verifyAndSanitizeResponse]
+        Sanitizer --> Persist[Persistencia en chat_conversations vía service_role]
+    end
+
+    Sanitizer -->|Respuesta JSON Verificada| User
+    OutOfScope --> User
 ```
 
-### 3. Respuesta que devuelve la Edge Function
+---
 
-```json
-{
-  "reply": "texto de respuesta formateado (markdown ligero)",
-  "confidence": 0.85,
-  "metadata": {
-    "variablesUsadas": ["temperatura", "precipitación"],
-    "fuentes": ["Open-Meteo", "SoilGrids"],
-    "fechaActualizacion": "2026-07-29"
-  }
-}
-```
+## 2. Herramientas Deterministas del Servidor
 
-### 4. Archivos involucrados
+La Edge Function no delega el cálculo numérico al LLM. Antes de invocar a Groq, ejecuta funciones deterministas (`deterministic.ts`):
 
-| Archivo | Rol |
-|---------|-----|
-| `supabase/functions/chat/index.ts` | Edge Function principal (clasificación + Groq) |
-| `src/services/chatbot.ts` | Sugerencias de preguntas para el panel |
-| `src/services/chatbot-rag.ts` | Contexto RAG + detección de intención |
-| `src/services/intent-classifier.ts` | Clasificador heurístico de intenciones |
-| `src/services/entity-extractor.ts` | Extracción de entidades por regex (sin API) |
-| `src/services/knowledge-base.ts` | 50+ entradas de conocimiento |
-| `src/services/data-orchestrator.ts` | Orquestador de datos climáticos y suelo |
-| `.env` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
+1. `getMunicipalityProfile(municipioId)`: Coordenadas, altitud oficial en msnm y zona agroecológica desde la tabla `municipios`.
+2. `getObservedYield(municipioId, cropId)`: Últimos rendimientos observados oficiales de EVA / MinAgricultura.
+3. `getPrediction(municipioId, cropId)`: Pronóstico activo Theil-Sen con intervalos de confianza al 80% y 95% ($L_{80}, U_{80}, L_{95}, U_{95}$).
+4. `getCropRequirements(cropId)`: Parámetros óptimos de Cenicafé / Fedecacao / AGROSAVIA.
+5. `getCurrentExternalContext(lat, lng)`: Clima actual de Open-Meteo y perfil de suelo de SoilGrids.
+6. `extractVerifiedNumbers(tools)`: Empaqueta todos los números válidos en una lista blanca de hechos inmutables.
 
-## Despliegue de la Edge Function
+---
 
-```bash
-# Instalar CLI de Supabase
-npx supabase login
+## 3. Modelo de Inferencia y Formato Estricto
 
-# Vincular el proyecto y desplegar la función
-npx supabase link --project-ref <ref>
-npx supabase functions deploy chat
+- **Proveedor:** Groq Cloud API compatible con OpenAI.
+- **Modelo:** `openai/gpt-oss-20b`.
+- **Formato:** Modo JSON forzado (`response_format: { type: "json_object" }`).
+- **Esquema de Salida (Zod):**
+  - `answer`: Respuesta redactada en lenguaje natural técnico.
+  - `summary`: Resumen ejecutivo en una oración.
+  - `claims`: Lista de afirmaciones estructuradas con tipo (`observed`, `forecast`, `model_estimate`, `agronomic_requirement`), fuente oficial, valor numérico, unidad y nivel de confianza.
+  - `recommendations`: Acciones recomendadas sustentadas en hechos.
+  - `insufficientData` / `needsHumanReview`: Banderas de calidad de datos.
 
-# Configurar el secreto GROQ_API_KEY
-npx supabase secrets set GROQ_API_KEY=tu_key
-```
+---
 
-## Importación de Conocimiento para RAG
+## 4. Saneamiento Anti-Alucinaciones (`verifyAndSanitizeResponse`)
 
-La base de conocimiento se mantiene en `src/services/knowledge-base.ts`:
+El módulo de verificación compara todas las cifras numéricas presentes en `answer`, `summary`, `claims` y `recommendations` contra `verifiedNumbers`. Si el LLM genera una cifra que no provenga del contexto determinista:
 
-```typescript
-import { KNOWLEDGE_BASE } from "./services/knowledge-base";
-const data = buildRagContext(consulta, 5);
-// data.entries → array de { question, answer, category, score }
-// Los top-K ítems más relevantes se inyectan en el system prompt de Groq
-```
+- La afirmación inventada es neutralizada a orientación general sin valor numérico.
+- Se activa la bandera `insufficientData: true` y `needsHumanReview: true`.
+- Se registra la discrepancia para observabilidad sin fallar la experiencia del usuario.
 
-## Mapa de Archivos del Chatbot
+---
 
-```
-src/services/
-├── chatbot.ts              # Sugerencias de preguntas
-├── chatbot-rag.ts          # Contexto RAG + detección de intención
-├── knowledge-base.ts       # 50+ entradas de conocimiento
-├── intent-classifier.ts    # Clasificador heurístico de intenciones
-├── entity-extractor.ts     # Extracción de entidades por regex
-├── data-orchestrator.ts    # Orquestador de clima/suelo
+## 5. Seguridad y Persistencia
 
-supabase/functions/
-├── chat/index.ts           # Edge Function (clasificación + Groq)
-└── cache-cleanup/index.ts  # Limpieza de caché expirado
-
-src/components/sembradata/
-├── ChatbotPanel.tsx        # UI del chatbot flotante
-```
-
-## Rollback / Modo local
-
-El clasificador heurístico y la base de conocimiento funcionan sin LLM: si la Edge Function no está desplegada o Groq no responde, se puede responder desde el contexto local de conocimiento sin generar respuestas por LLM.
+- **CORS:** Validación dinámica de orígenes con rechazo **HTTP 403 Forbidden** a llamadas ajenas a la allowlist.
+- **Secretos:** `GROQ_API_KEY` reside exclusivamente en los secretos de Supabase (`supabase secrets set GROQ_API_KEY="..."`).
+- **Persistencia RLS:** Las lecturas y escrituras en `chat_conversations` se realizan con `service_role` desde la Edge Function.

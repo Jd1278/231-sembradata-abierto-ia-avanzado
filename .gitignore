@@ -16,6 +16,9 @@ dist-ssr
 .nitro
 *.local
 
+# Lockfile — project uses Bun, ignore npm lockfile
+package-lock.json
+
 # Vercel build output (NITRO_PRESET=vercel)
 .vercel/
 
@@ -28,6 +31,13 @@ test-results/
 .env
 .env.local
 .env.production
+ATT41473.env
+
+# Database scripts (contain credentials)
+scripts/*.cjs
+
+# Supabase temp
+supabase/.temp/
 
 # Wrangler / Cloudflare
 .wrangler/
@@ -43,3 +53,4 @@ test-results/
 *.njsproj
 *.sln
 *.sw?
+.vercel

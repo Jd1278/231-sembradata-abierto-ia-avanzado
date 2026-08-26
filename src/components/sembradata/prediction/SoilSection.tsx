@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { SoilData } from "@/services/soil-service";
 import type { CropKey } from "@/types/crops";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 const PH_RANGES: Record<CropKey, [number, number]> = {
   cacao: [5.5, 7.0],
@@ -18,11 +20,34 @@ export function SoilSection({ soil, crop }: Props) {
   const phRange = crop ? PH_RANGES[crop] : [5.5, 7.0];
   const phStatus = soil.ph >= phRange[0] && soil.ph <= phRange[1] ? "favorable" : "unfavorable";
   const omStatus = soil.organicMatter >= 2.5 ? "favorable" : "unfavorable";
+  const isEstimated = soil.sourceType === "estimated";
 
   return (
     <Card className="rounded-2xl">
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-semibold">Condiciones del Suelo</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-semibold">Condiciones del Suelo</CardTitle>
+          {isEstimated ? (
+            <Badge
+              variant="outline"
+              className="text-[10px] gap-1 text-amber-700 bg-amber-500/10 border-amber-500/30"
+            >
+              <AlertCircle className="h-2.5 w-2.5" />
+              Estimado (OAT)
+            </Badge>
+          ) : (
+            <Badge
+              variant="outline"
+              className="text-[10px] gap-1 text-emerald-700 bg-emerald-500/10 border-emerald-500/30"
+            >
+              <CheckCircle2 className="h-2.5 w-2.5" />
+              SoilGrids 250m
+            </Badge>
+          )}
+        </div>
+        {soil.sourceDescription && (
+          <p className="text-[10px] text-muted-foreground mt-0.5">{soil.sourceDescription}</p>
+        )}
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid grid-cols-2 gap-2">

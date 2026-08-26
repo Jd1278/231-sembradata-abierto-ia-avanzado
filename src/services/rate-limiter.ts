@@ -4,6 +4,14 @@ interface RateLimitEntry {
 }
 
 const store = new Map<string, RateLimitEntry>();
+let cleanupCounter = 0;
+
+function cleanupExpired() {
+  const now = Date.now();
+  for (const [key, entry] of store) {
+    if (now > entry.resetAt) store.delete(key);
+  }
+}
 
 export interface RateLimitConfig {
   maxRequests: number;
@@ -25,6 +33,9 @@ function getKey(service: string, identifier: string): string {
 export function canMakeRequest(service: string, identifier = "global"): boolean {
   const config = DEFAULTS[service];
   if (!config) return true;
+
+  // Periodic cleanup every 100 requests
+  if (++cleanupCounter % 100 === 0) cleanupExpired();
 
   const key = getKey(service, identifier);
   const now = Date.now();
@@ -66,6 +77,7 @@ export async function rateLimitedFetch(
   url: string,
   identifier = "global",
   fetchInit?: RequestInit,
+  timeoutMs = 10_000,
 ): Promise<Response> {
   if (!canMakeRequest(service, identifier)) {
     const resetAt = getResetTime(service, identifier);
@@ -73,5 +85,11 @@ export async function rateLimitedFetch(
     throw new Error(`Rate limit exceeded for ${service}. Retry in ${Math.ceil(waitMs / 1000)}s.`);
   }
 
-  return fetch(url, fetchInit);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...fetchInit, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }

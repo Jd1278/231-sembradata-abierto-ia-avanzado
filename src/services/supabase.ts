@@ -136,3 +136,90 @@ export async function getPredicciones(
     return [];
   }
 }
+
+export async function getYieldSeriesByNames(
+  municipioNombre: string,
+  cultivoClave: string,
+): Promise<{
+  historical: RendimientoHistorico[];
+  predictions: Prediccion[];
+}> {
+  if (!isSupabaseConfigured()) return { historical: [], predictions: [] };
+  try {
+    const slug = municipioNombre
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+    const [{ data: muniById }, { data: muniByName }, { data: cultivo }] = await Promise.all([
+      supabase.from("municipios").select("id").eq("id", slug).maybeSingle(),
+      supabase
+        .from("municipios")
+        .select("id")
+        .ilike("nombre", municipioNombre.trim())
+        .maybeSingle(),
+      supabase.from("cultivos").select("id").eq("clave", cultivoClave).maybeSingle(),
+    ]);
+
+    const resolvedMuniId = muniById?.id ?? muniByName?.id;
+    const resolvedCultivoId = cultivo?.id ?? cultivoClave;
+
+    if (!resolvedMuniId) return { historical: [], predictions: [] };
+
+    const [historical, predictions] = await Promise.all([
+      getRendimientoHistorico(resolvedMuniId, resolvedCultivoId),
+      getPredicciones(resolvedMuniId, resolvedCultivoId),
+    ]);
+    return { historical, predictions };
+  } catch {
+    return { historical: [], predictions: [] };
+  }
+}
+
+export async function getCropClimateRequirements(cropId?: string) {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    let query = supabase.from("crop_climate_requirements").select("*").eq("active", true);
+    if (cropId) query = query.eq("crop_id", cropId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getClimateSummaries(municipioId: string, periodType?: string) {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    let query = supabase
+      .from("climate_summaries")
+      .select("*")
+      .eq("municipio_id", municipioId)
+      .order("period_end", { ascending: false });
+    if (periodType) query = query.eq("period_type", periodType);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getLatestCommodityPrices(commodity?: "cafe" | "cacao" | "granadilla") {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    let query = supabase
+      .from("commodity_prices")
+      .select("*")
+      .order("fetched_at", { ascending: false });
+    if (commodity) query = query.eq("commodity", commodity);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}

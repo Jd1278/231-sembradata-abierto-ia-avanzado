@@ -24,10 +24,11 @@ import { SantanderMap } from "./SantanderMap";
 import { YieldChart } from "./YieldChart";
 import { RiskChart } from "./RiskChart";
 import { MUNICIPIOS, CROP_DATA, computeAltitude } from "./data";
-import type { CropKey } from "@/types/crops";
-import { OfflineIndicator } from "./OfflineIndicator";
-import { HistoryPanel } from "./HistoryPanel";
+import type { CropKey, SoilType } from "@/types/crops";
+import { ConnectivityBanner } from "./ConnectivityBanner";
+import { useNetworkStatus } from "@/hooks/use-network-status";
 import { AdvancedFilters, type AdvancedFilterValues } from "./AdvancedFilters";
+import { isMunicipalityCompatible, hasActiveAdvancedFilters } from "@/services/map-compatibility";
 import { FilterBlock } from "./dashboard/FilterBlock";
 import { KpiCard } from "./dashboard/KpiCard";
 import { RiskKpiCard } from "./dashboard/RiskKpiCard";
@@ -39,7 +40,15 @@ import {
 } from "../../services/temporal-optimizer";
 import { SectionErrorBoundary } from "./SectionErrorBoundary";
 import { SANTANDER } from "@/data/departamentos";
-import { fetchCurrentClimate, type ClimateData } from "@/services/climate-api";
+import {
+  fetchCurrentClimate,
+  fetchHistoricalClimate,
+  type ClimateData,
+} from "@/services/climate-api";
+import {
+  buildMunicipalityClimateStates,
+  type MunicipalityClimateState,
+} from "@/services/climate-state";
 import { fetchSoilData, type SoilData } from "@/services/soil-service";
 import { evaluateViability, type ViabilityResult } from "@/types/prediction-v2";
 import { MONTH_LABELS } from "@/services/temporal-optimizer";
@@ -64,6 +73,7 @@ interface RealtimeData {
   soil: SoilData | null;
   viability: ViabilityResult | null;
   loading: boolean;
+  error: string | null;
 }
 
 const santanderMunis = MUNICIPIOS.filter(
@@ -84,21 +94,31 @@ export function Dashboard() {
     altitudeRange: [0, 4000],
     tempRange: [10, 35],
     precipRange: [0, 4000],
-    soilType: "all",
+    soilType: "all" as SoilType,
   });
   const [realtime, setRealtime] = useState<RealtimeData>({
     climate: null,
     soil: null,
     viability: null,
     loading: true,
+    error: null,
   });
+  const [mapStates, setMapStates] = useState<Record<string, MunicipalityClimateState> | null>(null);
+  const [mapStateError, setMapStateError] = useState<string | null>(null);
+  const { isOnline, lastOnlineAt } = useNetworkStatus();
+
+  const hasActiveFilters = useMemo(() => hasActiveAdvancedFilters(filters), [filters]);
 
   const filteredMunicipios = useMemo(() => {
     return santanderMunis.filter((m) => {
-      const alt = computeAltitude(m.factor);
-      return alt >= filters.altitudeRange[0] && alt <= filters.altitudeRange[1];
+      return isMunicipalityCompatible(m, filters, mapStates?.[m.name]);
     });
-  }, [filters]);
+  }, [filters, mapStates]);
+
+  const filteredNames = useMemo(
+    () => new Set(filteredMunicipios.map((m) => m.name)),
+    [filteredMunicipios],
+  );
 
   const cropInfo = CROP_DATA[crop];
   const muni = useMemo(
@@ -109,67 +129,172 @@ export function Dashboard() {
   const lat = muni ? (muni.geolat ?? SANTANDER.lat) : SANTANDER.lat;
   const lng = muni ? (muni.geolng ?? SANTANDER.lng) : SANTANDER.lng;
 
+  // A snapshot is committed only after every municipality has a final category.
+  // This prevents API completion order from recolouring individual municipalities.
+  useEffect(() => {
+    let active = true;
+    setMapStates(null);
+    setMapStateError(null);
+    buildMunicipalityClimateStates(
+      santanderMunis.map((m) => ({
+        name: m.name,
+        geolat: m.geolat,
+        geolng: m.geolng,
+        altitude: m.altitude ?? computeAltitude(m.name),
+      })),
+      crop,
+    )
+      .then((states) => {
+        if (active) setMapStates(states);
+      })
+      .catch((error) => {
+        console.warn("Map climate snapshot error:", error);
+        if (active) setMapStateError("No se pudo construir el estado climático del mapa.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [crop]);
+
   const fetchGen = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchRealtimeData = useCallback(async () => {
     if (!muni) {
-      setRealtime({ climate: null, soil: null, viability: null, loading: false });
+      setRealtime({ climate: null, soil: null, viability: null, loading: false, error: null });
       return;
     }
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     const gen = ++fetchGen.current;
-    setRealtime({ climate: null, soil: null, viability: null, loading: true });
+    setRealtime({ climate: null, soil: null, viability: null, loading: true, error: null });
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      if (gen === fetchGen.current)
+        setRealtime({
+          climate: null,
+          soil: null,
+          viability: null,
+          loading: false,
+          error: "Se requiere conexión a internet para consultar datos climáticos actualizados.",
+        });
+      return;
+    }
+
     try {
-      const pastDays = getOptimalPastDays(crop);
-      const [climateData, soilData] = await Promise.all([
-        fetchCurrentClimate(lat, lng, pastDays),
+      const currentYear = new Date().getFullYear();
+      const selectedYear = Number(year);
+      const monthIndex = MONTH_LABELS.indexOf(month);
+      const selectedMonth = monthIndex >= 0 ? monthIndex + 1 : 1;
+
+      let climatePromise: Promise<ClimateData>;
+      if (selectedYear > currentYear) {
+        if (gen === fetchGen.current)
+          setRealtime({
+            climate: null,
+            soil: null,
+            viability: null,
+            loading: false,
+            error: `Datos para ${selectedYear} no están disponibles aún. Seleccione un año anterior.`,
+          });
+        return;
+      } else if (selectedYear < currentYear) {
+        const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
+        const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+        const endDate = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+        climatePromise = fetchHistoricalClimate(lat, lng, startDate, endDate);
+      } else {
+        const pastDays = getOptimalPastDays(crop);
+        climatePromise = fetchCurrentClimate(lat, lng, pastDays);
+      }
+
+      const [climateResult, soilResult] = await Promise.allSettled([
+        climatePromise,
         fetchSoilData(lat, lng),
       ]);
 
-      if (gen !== fetchGen.current) return;
+      if (gen !== fetchGen.current || controller.signal.aborted) return;
 
-      const tempOk =
-        climateData.temperature >= filters.tempRange[0] &&
-        climateData.temperature <= filters.tempRange[1];
-      const precipOk =
-        climateData.precipitation >= filters.precipRange[0] &&
-        climateData.precipitation <= filters.precipRange[1];
+      const climateData = climateResult.status === "fulfilled" ? climateResult.value : null;
+      const soilData = soilResult.status === "fulfilled" ? soilResult.value : null;
 
-      const alt = computeAltitude(muni.factor);
-      const altOk = alt >= filters.altitudeRange[0] && alt <= filters.altitudeRange[1];
-
-      if (!tempOk || !precipOk || !altOk) {
+      if (!climateData) {
         if (gen === fetchGen.current)
-          setRealtime({ climate: null, soil: null, viability: null, loading: false });
+          setRealtime({
+            climate: null,
+            soil: soilData,
+            viability: null,
+            loading: false,
+            error: "No se pudieron cargar los datos climáticos.",
+          });
         return;
       }
 
-      const monthIndex = MONTH_LABELS.indexOf(month);
-      const currentMonth = monthIndex >= 0 ? monthIndex + 1 : 1;
+      const isHistorical = selectedYear < currentYear;
+      const alt = computeAltitude(muni.factor);
+      if (!isHistorical) {
+        const tempOk =
+          climateData.temperature >= filters.tempRange[0] &&
+          climateData.temperature <= filters.tempRange[1];
+        const precipOk =
+          climateData.precipitation >= filters.precipRange[0] &&
+          climateData.precipitation <= filters.precipRange[1];
+
+        const altOk = alt >= filters.altitudeRange[0] && alt <= filters.altitudeRange[1];
+
+        if (!tempOk || !precipOk || !altOk) {
+          if (gen === fetchGen.current)
+            setRealtime({
+              climate: climateData,
+              soil: soilData,
+              viability: null,
+              loading: false,
+              error:
+                "Los datos no coinciden con los filtros activos. Ajuste los filtros de temperatura, precipitación o altitud.",
+            });
+          return;
+        }
+      }
+
       const v = evaluateViability(
         crop,
-        soilData.ph,
-        soilData.organicMatter,
-        soilData.texture,
+        soilData?.ph ?? 6.5,
+        soilData?.organicMatter ?? 3.0,
+        soilData?.texture ?? "Franco",
         climateData.temperature,
         climateData.precipitation,
         climateData.humidity,
         climateData.windSpeed,
         climateData.solarRadiation,
         alt,
-        currentMonth,
+        selectedMonth,
         true,
       );
       if (gen === fetchGen.current)
-        setRealtime({ climate: climateData, soil: soilData, viability: v, loading: false });
+        setRealtime({
+          climate: climateData,
+          soil: soilData,
+          viability: v,
+          loading: false,
+          error: null,
+        });
     } catch (err) {
       console.warn("Dashboard fetchRealtimeData error:", err);
       if (gen === fetchGen.current)
-        setRealtime({ climate: null, soil: null, viability: null, loading: false });
+        setRealtime({
+          climate: null,
+          soil: null,
+          viability: null,
+          loading: false,
+          error: "No se pudieron cargar los datos climáticos.",
+        });
     }
-  }, [muni, crop, month, filters, lat, lng]);
+  }, [muni, crop, year, month, filters, lat, lng]);
 
   useEffect(() => {
     fetchRealtimeData();
+    return () => abortRef.current?.abort();
   }, [fetchRealtimeData]);
 
   useEffect(() => {
@@ -181,6 +306,10 @@ export function Dashboard() {
   const metrics = useMemo(() => {
     const v = realtime.viability;
     const c = realtime.climate;
+    const lastMonth =
+      c && c.monthlyPrecipitation.length > 0
+        ? c.monthlyPrecipitation[c.monthlyPrecipitation.length - 1]
+        : null;
     return {
       yield: v
         ? ((v.score / 100) * cropInfo.baseYield * 1.5).toFixed(2)
@@ -192,13 +321,17 @@ export function Dashboard() {
             ? ("Medio" as const)
             : ("Alto" as const)
         : (muni?.risk[crop] ?? ("Bajo" as const)),
-      precip: c ? Math.round(c.precipitation) : Math.round(80 + (muni?.factor ?? 1) * 90),
+      precip: lastMonth
+        ? Math.round(lastMonth.precipitation)
+        : Math.round(80 + (muni?.factor ?? 1) * 90),
       temp: c ? c.temperature.toFixed(1) : (22 + (1 - (muni?.factor ?? 1)) * 4).toFixed(1),
       gdd: c?.agriculturalIndex?.GrowingDegreeDays ?? 0,
       aridez: c?.agriculturalIndex?.aridityIndex ?? 0,
       estresHidrico: c?.agriculturalIndex?.moistureStressIndex ?? 0,
     };
   }, [realtime, cropInfo, muni, crop]);
+
+  const selectedClimateState = muni ? mapStates?.[muni.name] : undefined;
 
   return (
     <div className="min-h-screen bg-background">
@@ -224,6 +357,8 @@ export function Dashboard() {
                 <button
                   key={c.key}
                   onClick={() => setCrop(c.key)}
+                  aria-label={`Seleccionar ${c.label}`}
+                  aria-pressed={active}
                   className={cn(
                     "flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all",
                     active
@@ -239,7 +374,12 @@ export function Dashboard() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <HistoryPanel />
+            {lastOnlineAt && (
+              <span className="hidden text-[11px] text-muted-foreground md:inline-block">
+                Sincronizado:{" "}
+                {lastOnlineAt.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
           </div>
         </div>
       </header>
@@ -263,7 +403,7 @@ export function Dashboard() {
 
                 <FilterBlock label="Municipio" icon={<MapPin className="h-4 w-4" />}>
                   <Select value={municipio} onValueChange={setMunicipio}>
-                    <SelectTrigger className="w-full rounded-xl">
+                    <SelectTrigger className="w-full rounded-xl" aria-label="Seleccionar municipio">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -288,10 +428,16 @@ export function Dashboard() {
                       value={year}
                       onValueChange={(v) => {
                         setYear(v);
-                        if (Number(v) < Number(year)) setMonth("Ene");
+                        const sy = Number(v);
+                        const cy = new Date().getFullYear();
+                        if (sy < cy) {
+                          setMonth("Ene");
+                        } else if (sy === cy) {
+                          setMonth(MONTH_LABELS[new Date().getMonth()]);
+                        }
                       }}
                     >
-                      <SelectTrigger className="rounded-xl">
+                      <SelectTrigger className="rounded-xl" aria-label="Seleccionar año">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -305,15 +451,19 @@ export function Dashboard() {
                   </FilterBlock>
                   <FilterBlock label="Mes">
                     <Select value={month} onValueChange={setMonth}>
-                      <SelectTrigger className="rounded-xl">
+                      <SelectTrigger className="rounded-xl" aria-label="Seleccionar mes">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {MONTH_LABELS.slice(
                           0,
-                          Number(year) === new Date().getFullYear()
-                            ? new Date().getMonth() + 1
-                            : 12,
+                          (() => {
+                            const sy = Number(year);
+                            const cy = new Date().getFullYear();
+                            if (sy === cy) return new Date().getMonth() + 1;
+                            if (sy > cy) return 0;
+                            return 12;
+                          })(),
                         ).map((m) => (
                           <SelectItem key={m} value={m}>
                             {m}
@@ -339,17 +489,57 @@ export function Dashboard() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl bg-gradient-to-br from-primary/10 via-card to-sky/10">
-              <CardContent className="pt-6">
-                <p className="text-xs font-medium uppercase tracking-wider text-primary">
-                  Recomendación
-                </p>
-                <p className="mt-2 text-sm leading-relaxed text-foreground">
-                  Ventana óptima de siembra para <b>{cropInfo.label}</b>{" "}
-                  {muni ? `en ${muni.name}` : ""}: <b>{cropInfo.window}</b>.
-                </p>
-              </CardContent>
-            </Card>
+            <SectionErrorBoundary sectionName="Recomendación">
+              <Card className="rounded-2xl bg-gradient-to-br from-primary/10 via-card to-sky/10">
+                <CardContent className="pt-6">
+                  <p className="text-xs font-medium uppercase tracking-wider text-primary">
+                    Recomendación
+                  </p>
+                  {realtime.viability ? (
+                    <div className="mt-2 space-y-2">
+                      {realtime.loading ? null : (
+                        <p className="text-sm leading-relaxed text-foreground">
+                          {realtime.viability.score >= 70 ? (
+                            <>
+                              Condiciones favorables para <b>{cropInfo.label}</b> en{" "}
+                              <b>{muni?.name}</b>. Ventana óptima de siembra:{" "}
+                              <b>{cropInfo.window}</b>.
+                            </>
+                          ) : realtime.viability.score >= 50 ? (
+                            <>
+                              Riesgo moderado para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>.
+                              Revise los factores antes de sembrar.
+                            </>
+                          ) : (
+                            <>
+                              Alto riesgo para <b>{cropInfo.label}</b> en <b>{muni?.name}</b>.
+                              Considere cultivos alternativos.
+                            </>
+                          )}
+                        </p>
+                      )}
+                      {realtime.viability.recommendations.length > 0 && (
+                        <ul className="space-y-1">
+                          {realtime.viability.recommendations.slice(0, 3).map((rec, i) => (
+                            <li
+                              key={i}
+                              className="flex items-start gap-1.5 text-xs text-muted-foreground"
+                            >
+                              <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
+                              {rec}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      Seleccione un municipio y cultivo para ver recomendaciones.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </SectionErrorBoundary>
           </aside>
 
           {/* Main content */}
@@ -363,34 +553,42 @@ export function Dashboard() {
               </div>
             )}
 
+            {realtime.error && !realtime.loading && (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                {realtime.error}
+              </div>
+            )}
+
             {/* KPIs */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
-              <KpiCard
-                label="Rendimiento estimado"
-                value={metrics.yield}
-                unit="Ton/Ha"
-                trend={realtime.viability ? `${realtime.viability.score} pts` : "Sin datos"}
-                icon={<TrendingUp className="h-5 w-5" />}
-                tone="primary"
-              />
-              <RiskKpiCard risk={metrics.risk} />
-              <KpiCard
-                label="Precipitación esperada"
-                value={String(metrics.precip)}
-                unit="mm / mes"
-                trend="Normal"
-                icon={<Droplets className="h-5 w-5" />}
-                tone="sky"
-              />
-              <KpiCard
-                label="Temperatura promedio"
-                value={metrics.temp}
-                unit="°C"
-                trend={realtime.climate ? "Tiempo real" : "Sin datos"}
-                icon={<Thermometer className="h-5 w-5" />}
-                tone="earth"
-              />
-            </div>
+            <SectionErrorBoundary sectionName="Indicadores clave">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+                <KpiCard
+                  label="Rendimiento estimado"
+                  value={metrics.yield}
+                  unit="Ton/Ha"
+                  trend={realtime.viability ? `${realtime.viability.score} pts` : "Sin datos"}
+                  icon={<TrendingUp className="h-5 w-5" />}
+                  tone="primary"
+                />
+                <RiskKpiCard risk={metrics.risk} />
+                <KpiCard
+                  label="Precipitación mensual"
+                  value={String(metrics.precip)}
+                  unit="mm"
+                  trend={realtime.climate?.monthlyPrecipitation?.length ? "Real" : "Estimado"}
+                  icon={<Droplets className="h-5 w-5" />}
+                  tone="sky"
+                />
+                <KpiCard
+                  label="Temperatura promedio"
+                  value={metrics.temp}
+                  unit="°C"
+                  trend={realtime.climate ? "Tiempo real" : "Sin datos"}
+                  icon={<Thermometer className="h-5 w-5" />}
+                  tone="earth"
+                />
+              </div>
+            </SectionErrorBoundary>
 
             {/* Índices agroclimáticos */}
             {realtime.climate && (
@@ -401,7 +599,7 @@ export function Dashboard() {
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-muted/40 px-3 py-1.5">
                   <span className="font-medium text-foreground">Índice de aridez</span>
-                  <span className={metrics.aridez > 0.5 ? "text-risk-high" : "text-risk-low"}>
+                  <span className={metrics.aridez < 0.5 ? "text-risk-high" : "text-risk-low"}>
                     {metrics.aridez.toFixed(2)}
                   </span>
                 </span>
@@ -417,58 +615,82 @@ export function Dashboard() {
             )}
 
             {/* Map */}
-            <Card className="overflow-hidden rounded-2xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                <div>
-                  <CardTitle className="text-base font-semibold">
-                    Mapa — {SANTANDER.nombre}
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    Riesgo agroclimático para {cropInfo.label} · {month} {year}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapLegend />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="rounded-xl text-xs text-muted-foreground hover:text-foreground"
-                    onClick={() => {
-                      setMunicipio(
-                        santanderMunis.find((m) => /vicente/i.test(m.name))?.name ??
-                          santanderMunis[0]?.name ??
-                          "",
-                      );
-                    }}
-                  >
-                    Limpiar
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl text-xs"
-                    onClick={() => setShowPrediction(true)}
-                  >
-                    Analizar zona
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <SantanderMap
-                  crop={crop}
-                  selected={muni?.name ?? ""}
-                  onSelect={setMunicipio}
-                  dynamicRisk={
-                    realtime.viability
-                      ? {
-                          level: metrics.risk,
-                          score: realtime.viability.score,
-                        }
-                      : undefined
-                  }
-                />
-              </CardContent>
-            </Card>
+            <SectionErrorBoundary sectionName="Mapa de riesgo">
+              <Card className="overflow-hidden rounded-2xl">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                  <div>
+                    <CardTitle className="text-base font-semibold">
+                      Mapa — {SANTANDER.nombre}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      Riesgo agroclimático para {cropInfo.label} · {month} {year}
+                      {filteredMunicipios.length < santanderMunis.length && (
+                        <span className="ml-2 text-primary font-medium">
+                          {filteredMunicipios.length} de {santanderMunis.length} municipios
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapLegend />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="rounded-xl text-xs text-muted-foreground hover:text-foreground"
+                      aria-label="Limpiar filtros y selección"
+                      onClick={() => {
+                        setMunicipio(
+                          santanderMunis.find((m) => /vicente/i.test(m.name))?.name ??
+                            santanderMunis[0]?.name ??
+                            "",
+                        );
+                        setCrop("cacao");
+                        setYear(new Date().getFullYear().toString());
+                        setMonth(MONTH_LABELS[new Date().getMonth()]);
+                        setFilters({
+                          altitudeRange: [0, 4000],
+                          tempRange: [10, 35],
+                          precipRange: [0, 4000],
+                          soilType: "all" as SoilType,
+                        });
+                        setShowPrediction(false);
+                      }}
+                    >
+                      Limpiar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl text-xs"
+                      aria-label="Analizar zona seleccionada"
+                      disabled={!isOnline}
+                      title={
+                        !isOnline
+                          ? "Se requiere conexión a internet para analizar la zona"
+                          : undefined
+                      }
+                      onClick={() => {
+                        if (muni && isOnline) setShowPrediction(true);
+                      }}
+                    >
+                      Analizar zona
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <SantanderMap
+                    crop={crop}
+                    selected={muni?.name ?? ""}
+                    onSelect={setMunicipio}
+                    climateStates={mapStates ?? undefined}
+                    climateReady={!!mapStates}
+                    loadingClimateStates={!mapStates && !mapStateError}
+                    filteredNames={filteredNames}
+                    hasActiveFilters={hasActiveFilters}
+                  />
+                </CardContent>
+              </Card>
+            </SectionErrorBoundary>
 
             {/* Charts */}
             <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-6">
@@ -482,11 +704,14 @@ export function Dashboard() {
                   </p>
                 </CardHeader>
                 <CardContent>
-                  <YieldChart
-                    crop={crop}
-                    factor={muni?.factor ?? 1}
-                    viabilityScore={realtime.viability?.score ?? 50}
-                  />
+                  <SectionErrorBoundary sectionName="Gráfico de rendimiento">
+                    <YieldChart
+                      crop={crop}
+                      municipio={muni?.name ?? ""}
+                      filters={filters}
+                      climateState={mapStates?.[muni?.name ?? ""]}
+                    />
+                  </SectionErrorBoundary>
                 </CardContent>
               </Card>
 
@@ -498,11 +723,13 @@ export function Dashboard() {
                   <p className="text-xs text-muted-foreground">Sequía, heladas y plagas</p>
                 </CardHeader>
                 <CardContent>
-                  <RiskChart
-                    factor={muni?.factor ?? 1}
-                    climate={realtime.climate}
-                    viability={realtime.viability}
-                  />
+                  <SectionErrorBoundary sectionName="Gráfico de riesgos">
+                    <RiskChart
+                      factor={muni?.factor ?? 1}
+                      climate={realtime.climate}
+                      viability={realtime.viability}
+                    />
+                  </SectionErrorBoundary>
                 </CardContent>
               </Card>
 
@@ -523,7 +750,13 @@ export function Dashboard() {
                           realtime.climate ? realtime.climate.temperature : Number(metrics.temp)
                         }
                         humidity={realtime.climate?.humidity ?? 75}
-                        precipitation={realtime.climate?.precipitation ?? metrics.precip}
+                        precipitation={
+                          realtime.climate?.monthlyPrecipitation?.length
+                            ? realtime.climate.monthlyPrecipitation[
+                                realtime.climate.monthlyPrecipitation.length - 1
+                              ].precipitation
+                            : metrics.precip
+                        }
                         windSpeed={realtime.climate?.windSpeed ?? 12}
                         solarRadiation={realtime.climate?.solarRadiation ?? 18}
                       />
@@ -547,6 +780,8 @@ export function Dashboard() {
               altitude={computeAltitude(muni?.factor)}
               departamento={SANTANDER.nombre}
               month={month}
+              sharedClimate={selectedClimateState?.climate ?? null}
+              climateState={selectedClimateState ?? null}
               onClose={() => setShowPrediction(false)}
             />
           </Suspense>
@@ -558,7 +793,11 @@ export function Dashboard() {
           <ChatbotPanel municipio={muni?.name ?? ""} crop={cropInfo.label} />
         </Suspense>
       </SectionErrorBoundary>
-      <OfflineIndicator />
+      <ConnectivityBanner
+        onRetry={() => {
+          fetchRealtimeData();
+        }}
+      />
     </div>
   );
 }

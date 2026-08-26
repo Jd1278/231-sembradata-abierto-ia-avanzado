@@ -707,28 +707,112 @@ function tokenize(text: string): string[] {
   return normalize(text).split(/\s+/).filter(Boolean);
 }
 
-function scoreEntry(query: string, entry: RagEntry): number {
-  const qTokens = tokenize(query);
+export interface RagFilterContext {
+  crop?: string | null;
+  intent?: string | null;
+  category?: string | null;
+}
+
+const STOPWORDS = new Set([
+  "de",
+  "la",
+  "el",
+  "en",
+  "y",
+  "a",
+  "los",
+  "las",
+  "del",
+  "un",
+  "una",
+  "para",
+  "por",
+  "con",
+  "que",
+  "cual",
+  "como",
+  "es",
+  "son",
+]);
+
+function scoreEntry(query: string, entry: RagEntry, ctx?: RagFilterContext): number {
   const qNorm = normalize(query);
+  const qTokens = tokenize(query).filter((t) => !STOPWORDS.has(t));
   if (qTokens.length === 0) return 0;
 
-  const keywordMatches = entry.keywords.filter((kw) => qNorm.includes(normalize(kw))).length;
-  const questionMatch = normalize(entry.question).includes(qNorm) ? 5 : 0;
-  const answerTokens = tokenize(entry.answer);
+  // 1. Keyword and question matches
+  const keywordMatches = entry.keywords.filter((kw) => {
+    const kwNorm = normalize(kw);
+    return !STOPWORDS.has(kwNorm) && qNorm.includes(kwNorm);
+  }).length;
+  const questionMatch = normalize(entry.question).includes(qNorm) ? 6 : 0;
+  const answerTokens = tokenize(entry.answer).filter((t) => !STOPWORDS.has(t));
   const tokenOverlap =
     answerTokens.filter((t) => qTokens.includes(t)).length / Math.max(answerTokens.length, 1);
 
-  return keywordMatches * 3 + questionMatch * 2 + tokenOverlap * 10;
+  let baseScore = keywordMatches * 3 + questionMatch * 2 + tokenOverlap * 10;
+
+  // 2. Crop context alignment
+  if (ctx?.crop) {
+    const targetCrop = normalize(ctx.crop);
+    if (entry.crop) {
+      const entryCrop = normalize(entry.crop);
+      if (entryCrop === targetCrop) {
+        baseScore += 6; // Strong boost for matching target crop
+      } else {
+        baseScore -= 12; // Strong penalty for conflicting crop
+      }
+    }
+  }
+
+  // 3. Intent & Category alignment
+  if (ctx?.intent) {
+    const intent = ctx.intent.toUpperCase();
+    if (intent === "MARKET_PRICE") {
+      if (entry.category === "mercado" || entry.category === "precio") {
+        baseScore += 6;
+      } else {
+        baseScore -= 4;
+      }
+    } else if (intent === "CROP_REQUIREMENTS" || intent === "CROP_RECOMMENDATION") {
+      if (
+        entry.category === "siembra" ||
+        entry.category === "suelo" ||
+        entry.category === "cultivo"
+      ) {
+        baseScore += 5;
+      } else if (entry.category === "mercado") {
+        baseScore -= 8; // Don't return market info for agronomic planting questions
+      }
+    } else if (intent === "CROP_RISK_ANALYSIS" || intent === "RISK_ANALYSIS") {
+      if (
+        entry.category === "plaga" ||
+        entry.category === "clima" ||
+        entry.category === "enfermedad"
+      ) {
+        baseScore += 6;
+      }
+    }
+  }
+
+  return Math.max(0, baseScore);
 }
 
-export function searchKnowledgeBase(query: string, topK = 2): RagResult[] {
+export const MIN_RAG_RELEVANCE_SCORE = 3.0;
+
+export function searchKnowledgeBase(
+  query: string,
+  topK = 2,
+  minScore = MIN_RAG_RELEVANCE_SCORE,
+  ctx?: RagFilterContext,
+): RagResult[] {
   const results: RagResult[] = KNOWLEDGE_BASE.map((entry) => ({
     entry,
-    score: scoreEntry(query, entry),
+    score: scoreEntry(query, entry, ctx),
   }));
 
   return results
-    .filter((r) => r.score > 0)
+    .filter((r) => r.score >= minScore)
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
 }
@@ -746,5 +830,10 @@ export function getEntriesByCategory(category: string): RagEntry[] {
 
 export function formatRagContext(results: RagResult[]): string {
   if (results.length === 0) return "";
-  return results.map((r, i) => `[${i + 1}] ${r.entry.question}\n${r.entry.answer}`).join("\n\n");
+  return results
+    .map(
+      (r, i) =>
+        `[Documento Agronómico ${i + 1} | Fuente: Manual Técnico ICA / Fedecacao / Cenicafé (v2.0)]\nPregunta: ${r.entry.question}\nContenido: ${r.entry.answer}`,
+    )
+    .join("\n\n");
 }

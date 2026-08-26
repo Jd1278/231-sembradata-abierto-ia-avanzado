@@ -1,42 +1,43 @@
-# Fuentes de Datos
+# Fuentes de Datos — SembraData
 
-## Datos Climáticos
+Inventario de fuentes de datos primarias, secundarias y servicios de cómputo utilizados en SembraData.
 
-| Fuente               | URL                         | Costo              | Frecuencia       | Variables                                                                                                      | Cache            |
-| -------------------- | --------------------------- | ------------------ | ---------------- | -------------------------------------------------------------------------------------------------------------- | ---------------- |
-| Open-Meteo           | https://open-meteo.com      | Gratis             | Diaria / Horaria | Temperatura, precipitación, viento, radiación solar, humedad, UV, pronóstico 7d, históricos 90d                | No (tiempo real) |
-| IDEAM (datos.gov.co) | https://datos.gov.co        | Gratis (app token) | Diaria           | Temperatura, precipitación, viento, humedad, radiación solar, nubosidad                                        | 24 horas         |
-| NASA POWER           | https://power.larc.nasa.gov | Gratis             | Diaria           | Temperatura, precipitación, radiación solar, humedad, viento + índices agroclimáticos (GDD, aridez, estrés UV) | 7 días           |
+---
 
-## Datos de Suelo
+## 1. Datos Históricos Oficiales y Requerimientos Agronómicos
 
-| Fuente            | URL                    | Costo  | Variables                                                                 | Profundidades                                        |
-| ----------------- | ---------------------- | ------ | ------------------------------------------------------------------------- | ---------------------------------------------------- |
-| SoilGrids (ISRIC) | https://rest.isric.org | Gratis | pH, materia orgánica, textura, drenaje, carbono orgánico, fertilidad, CIC | 0-5cm, 5-15cm, 15-30cm, 30-60cm, 60-100cm, 100-200cm |
+| Fuente / Institución                 | Descripción                                                                                                | Acceso / Protocolo                      | Rol en SembraData                                                                               |
+| :----------------------------------- | :--------------------------------------------------------------------------------------------------------- | :-------------------------------------- | :---------------------------------------------------------------------------------------------- |
+| Fuente / Institución                 | Descripción                                                                                                | Acceso / Protocolo                      | Rol en SembraData                                                                               |
+| :----------------------------------- | :--------------------------------------------------------------------------------------------------------- | :-------------------------------------  | :---------------------------------------------------------------------------------------------- |
+| **MinAgricultura / EVA**             | Evaluaciones Agropecuarias Municipales históricas (rendimiento en Ton/Ha y superficie en Ha, 2018–2024).   | Supabase (`rendimiento_historico`)      | **Observación Histórica Oficial**. Serie fundamental para el cálculo de tendencias ($N \ge 3$). |
+| **Cenicafé / Fedecacao / AGROSAVIA** | Manuales técnicos y requerimientos agroclimáticos óptimos de Café, Cacao y Granadilla.                     | Supabase (`crop_climate_requirements`)  | **Reglas Agronómicas Deterministas** (temperatura, precipitación, altitud y pH).                |
+| **ICE Futures / FRED / DANE SIPSA**  | Cotizaciones de referencia internacional (ICE US Cocoa CC / Coffee KC) y nacional mayorista DANE SIPSA.    | Endpoint / Supabase (`commodity_cache`) | **Mercado Agroclimático**. Precios de referencia con estrategia _Stale-While-Revalidate_.       |
 
-## Datos de Mercado
+---
 
-| Fuente                 | URL                                  | Costo  | Variables                                                                | Cache  |
-| ---------------------- | ------------------------------------ | ------ | ------------------------------------------------------------------------ | ------ |
-| Commodity Forecast API | https://www.commodityforecasts.co.uk | Gratis | Precios internacionales de café (Arabica) y cacao + riesgo climático     | 1 hora |
+## 2. Datos Meteorológicos y Satelitales
 
-## Datos Geoespaciales
+| Fuente                   | Variables                                                                                                     | Frecuencia            | Caché / TTL                                 |
+| :----------------------- | :------------------------------------------------------------------------------------------------------------ | :-------------------- | :------------------------------------------ |
+| **Open-Meteo API**       | Temperatura actual, humedad relativa, precipitación 7 días, velocidad de viento, radiación y balance hídrico. | Tiempo real / Horaria | Sin caché (consulta directa)                |
+| **NASA POWER**           | Radiación solar diaria, evapotranspiración de referencia ($ET_0$), índices GDD y estrés térmico (15 params).  | Diaria                | Caché Supabase (`nasa_power_cache`, 7 días) |
+| **IDEAM (datos.gov.co)** | Observaciones de estaciones meteorológicas oficiales en territorio santandereano.                             | Diaria                | Caché Supabase (`ideam_cache`, 24 horas)    |
 
-| Fuente           | URL                     | Formato      | Descripción                                        |
-| ---------------- | ----------------------- | ------------ | -------------------------------------------------- |
-| DANE - Divipola  | https://www.dane.gov.co | JSON/GeoJSON | Límites municipales del departamento de Santander  |
-| GeoJSON Colombia | Archivo local           | GeoJSON      | Departamento de Santander para visualización SVG |
+---
 
-## Datos de Riesgo Agroclimático
+## 3. Datos Pedológicos (Suelo)
 
-| Fuente          | Descripción                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------- |
-| NASA POWER      | Índices agroclimáticos (GDD, aridez, estrés hídrico) calculados a partir de datos satelitales     |
-| Motor de predicción | Modelo de riesgo (sequía, helada, plaga) combinando clima, suelo y cultivo en `src/services/prediction-engine.ts` |
+| Fuente                | Variables                                                                  | Profundidades                                                 |
+| :-------------------- | :------------------------------------------------------------------------- | :------------------------------------------------------------ |
+| **SoilGrids (ISRIC)** | pH en $H_2O$, materia orgánica, contenido de arena/arcilla/limo y textura. | 6 capas ($0\text{-}5\text{ cm}$ a $100\text{-}200\text{ cm}$) |
 
-## IA y Backend
+---
 
-| Fuente          | Descripción                                                                    |
-| --------------- | ------------------------------------------------------------------------------ |
-| Groq (Llama 3.1 8B) | Chatbot con RAG sobre la base de conocimiento local (server-side, Edge Function de Supabase) |
-| Supabase        | PostgreSQL + Edge Functions + caché de APIs con TTL y control de concurrencia  |
+## 4. Modelos de Inferencia e Inteligencia Artificial
+
+| Servicio / Modelo                                    | Rol Arquitectónico                                                                                                        | Limitación Estricta                                                                          |
+| :--------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------- |
+| **Theil-Sen / Rolling Backtest** (SembraData Engine) | Cálculo estadístico determinista de tendencias e intervalos de confianza al 80% y 95% ($L_{80}, U_{80}, L_{95}, U_{95}$). | **Única fuente de predicciones numéricas**. Requiere $N \ge 3$ observaciones reales de EVA.  |
+| **Groq Cloud (`openai/gpt-oss-20b`)**                | Asistente conversacional agroclimático en Edge Function `chat` con validación Zod y RAG.                                  | **No inventa cifras**. Explica exclusivamente datos suministrados por el motor determinista. |
+| **Google Gemini 2.0 Flash**                          | Evaluación cualitativa de consistencia biológica en Edge Function `gemini-assessment`.                                    | **No genera ni altera proyecciones estadísticas**.                                           |

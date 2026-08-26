@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { fetchIdeamForLocation, type IdeamStation, type IdeamObservation } from "@/services/ideam";
 import { IdeamSkeleton } from "../Skeletons";
-import { saveOffline, getOffline } from "@/hooks/use-offline";
+import { WifiOff, RefreshCw } from "lucide-react";
 
 interface Props {
   lat: number;
@@ -11,53 +11,72 @@ interface Props {
   departamento?: string;
 }
 
-const CACHE_KEY = (lat: number, lng: number) => `ideam_${lat.toFixed(2)}_${lng.toFixed(2)}`;
-
-interface IdeamCache {
-  station: IdeamStation;
-  observations: IdeamObservation[];
-}
-
 export function IdeamStationSection({ lat, lng, departamento }: Props) {
   const [station, setStation] = useState<IdeamStation | null>(null);
   const [observations, setObservations] = useState<IdeamObservation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isStale, setIsStale] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
-    const cached = getOffline<IdeamCache>(CACHE_KEY(lat, lng));
-    if (cached) {
-      setStation(cached.station);
-      setObservations(cached.observations);
-      setIsStale(true);
-      setLoading(false);
-    }
+  const fetchData = useCallback(
+    async (signal?: AbortSignal) => {
+      setLoading(true);
+      setError(null);
 
-    if (!navigator.onLine) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const result = await fetchIdeamForLocation(lat, lng, departamento, 30);
-      if (result) {
-        setStation(result.station);
-        setObservations(result.observations);
-        setIsStale(false);
-        saveOffline(CACHE_KEY(lat, lng), result);
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setError(
+          "Se requiere conexión a internet para consultar estaciones meteorológicas oficiales del IDEAM.",
+        );
+        setLoading(false);
+        return;
       }
-    } catch {
-      if (!cached) setStation(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [lat, lng, departamento]);
+
+      try {
+        const result = await fetchIdeamForLocation(lat, lng, departamento, 30);
+        if (result && !signal?.aborted) {
+          setStation(result.station);
+          setObservations(result.observations);
+        }
+      } catch {
+        if (!signal?.aborted) {
+          setError("No se pudieron consultar las estaciones del IDEAM en este momento.");
+          setStation(null);
+        }
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+      }
+    },
+    [lat, lng, departamento],
+  );
 
   useEffect(() => {
-    fetchData().then(() => {});
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
   }, [fetchData]);
 
   if (loading) return <IdeamSkeleton />;
+
+  if (error && !station) {
+    return (
+      <Card className="rounded-2xl border-dashed">
+        <CardContent className="py-6 flex flex-col items-center justify-center text-center gap-2">
+          <WifiOff className="h-6 w-6 text-muted-foreground" />
+          <p className="text-xs text-muted-foreground max-w-sm">{error}</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => fetchData()}
+            className="mt-1 h-7 rounded-lg text-xs"
+          >
+            <RefreshCw className="h-3 w-3 mr-1.5" />
+            Reintentar
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!station) return null;
 
   const recentObs = observations.slice(-7);
@@ -76,11 +95,6 @@ export function IdeamStationSection({ lat, lng, departamento }: Props) {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-semibold">Estación IDEAM Más Cercana</CardTitle>
-          {isStale && (
-            <Badge variant="secondary" className="text-[9px]">
-              Datos guardados
-            </Badge>
-          )}
         </div>
         <p className="text-[11px] text-muted-foreground">
           Datos reales de estaciones meteorológicas de Santander

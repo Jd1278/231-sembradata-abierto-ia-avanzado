@@ -1,84 +1,56 @@
-# Guia de Validacion
+# Guía de Validación y Reproducibilidad — SembraData
 
-Esta guia permite a pares revisores validar los resultados y metodologia de SembraData.
+Esta guía permite a auditores, evaluadores técnicos y pares revisores validar los resultados, la metodología y los componentes de SembraData.
 
-## 1. Validacion de Datos
+---
 
-### Verificar fuentes
+## 1. Validación de Datos e Integridad Histórica
 
-- Confirmar que los datos climaticos coinciden con registros del IDEAM
-- Validar limites municipales con el DANE (MCP actualizado)
-- Validar propiedades de suelo con SoilGrids (ISRIC, 6 profundidades)
-- Comparar pronosticos con historicos satelitales de NASA POWER (indices agroclimaticos)
-- Validar precios de commodities con Commodity Forecast
+### Verificación de Fuentes
 
-### Calidad de datos
+- **Series Históricas:** Confirmar que los rendimientos históricos en `rendimiento_historico` corresponden a las Evaluaciones Agropecuarias Municipales (EVA / MinAgricultura).
+- **Límites Territoriales:** Validar que el GeoJSON y catálogo municipal cubren exactamente los **87 municipios de Santander**.
+- **Propiedades de Suelo:** Contrastar perfiles de suelo con SoilGrids ISRIC a 6 profundidades.
+- **Meteorología:** Verificar que Open-Meteo e IDEAM suministran variables climáticas consistentes en tiempo real.
+- **Aislamiento de Anomalías:** Comprobar que anomalías o valores físicos imposibles son aislados en `data_quality_quarantine`.
 
-```bash
-# Ejecutar tests de integracion de datos
-npm run test
-```
+---
 
-## 2. Validacion de Modelos
+## 2. Validación de Modelos y Anti-Alucinación
 
-### Metricas esperadas
+### Criterios de Rendimiento y Cobertura
 
-| Modelo                  | Metrica  | Valor esperado |
-| ----------------------- | -------- | -------------- |
-| Rendimiento (regresion) | R2       | >= 0.75        |
-| Rendimiento (regresion) | MAE      | <= 0.15 Ton/Ha |
-| Riesgo (clasificacion)  | F1-Score | >= 0.80        |
-| Riesgo (clasificacion)  | AUC-ROC  | >= 0.85        |
+- **Estimador Theil-Sen:** Proyección de tendencia con pendientes medianas robustas frente a valores atípicos.
+- **Intervalos de Predicción:** Validación matemática de límites $L_{80} \le \text{Pred} \le U_{80}$ y $L_{95} \le L_{80} \le U_{80} \le U_{95}$.
+- **Insuficiencia de Muestra:** Si un cultivo en un municipio tiene menos de 3 años de datos observados ($N < 3$), el sistema debe retornar `insufficient_data` (**0 datos sintéticos**).
+- **Chatbot Trazable:** Las respuestas deben estructurarse con Zod, rechazar consultas fuera de Santander y respaldar todas las afirmaciones numéricas con hechos observados o normativos.
 
-### Reproducibilidad
+---
+
+## 3. Comandos de Reproducibilidad Técnica
 
 ```bash
-# Ejecutar todos los tests unitarios (145 tests)
+# 1. Validación estricta de tipos TypeScript
+npm run typecheck
+
+# 2. Análisis estático de código y reglas de calidad
+npm run lint
+
+# 3. Ejecución de la suite completa de pruebas unitarias e integración (424 tests / 55 suites)
 npm run test
 
-# Ejecutar tests E2E (31 casos)
-npm run test:e2e
-
-# Validacion completa
+# 4. Pipeline de validación integral y compilación de producción Nitro SSR
 npm run validate
 ```
 
-## 3. Validacion de la Interfaz
+---
 
-### Criterios de aceptacion
+## 4. Lista de Verificación de Interfaz y Usabilidad
 
-- [ ] El mapa muestra los 87 municipios de Santander
-- [ ] Los filtros (departamento, cultivo) funcionan correctamente
-- [ ] Los KPIs se actualizan al cambiar los filtros
-- [ ] Los graficos muestran datos coherentes
-- [ ] El chatbot responde en lenguaje natural con memoria
-- [ ] La exportacion a PDF genera un documento completo
-- [ ] La exportacion a Excel genera un archivo .xlsx
-- [ ] El modo offline funciona (IndexedDB + Service Worker)
-- [ ] La navegacion por teclado funciona en el mapa SVG
-- [ ] El skip-to-content link funciona correctamente
-- [ ] Los focus traps funcionan en modales (PredictionPanel, HistoryPanel)
-- [ ] Las regiones aria-live anuncian actualizaciones dinamicas
-- [ ] El boton de compartir genera una URL valida
-
-## 4. Validacion de APIs Externas
-
-### Verificar integraciones
-
-| API            | Endpoint        | Verificacion                               |
-| -------------- | --------------- | ------------------------------------------ |
-| Open-Meteo     | /v1/forecast    | Datos climaticos actuales + pronostico 7d  |
-| NASA POWER     | /temporal/daily | Datos satelitales + indices agroclimaticos |
-| IDEAM          | datos.gov.co    | Estaciones meteorologicas reales           |
-| SoilGrids      | /soilgrids/v2.0 | Propiedades del suelo a 6 profundidades    |
-| Commodity Forecast | commodityforecasts.co.uk | Precios cafe y cacao              |
-| Groq (chatbot) | api.groq.com    | Respuestas del chatbot (server-side)       |
-| Supabase       | supabase.co     | Cache de APIs, historial, Edge Functions   |
-
-## 5. Validacion Etica
-
-- Ejecutar tests de equidad territorial
-- Verificar que municipios pequenos no reciben sistematicamente clasificaciones de alto riesgo
-- Confirmar que las metricas de confianza se muestran al usuario
-- Validar que el chatbot no genera recomendaciones medicas o legales
-- Verificar que las alertas no causan alarmismo innecesario
+- [ ] El mapa coroplético renderiza los **87 municipios de Santander**.
+- [ ] La selección de municipio y cultivo actualiza los paneles de clima, suelo y requerimientos.
+- [ ] El gráfico **Histórico vs. Predicción** muestra la serie observada de EVA continuada por el pronóstico Theil-Sen con intervalos de confianza.
+- [ ] La Edge Function `gemini-assessment` emite evaluación cualitativa de consistencia agronómica.
+- [ ] El chatbot responde preguntas agronómicas con el modelo `openai/gpt-oss-20b` y muestra el acordeón de afirmaciones verificadas.
+- [ ] El detector de conectividad en tiempo real informa el estado online/offline sin almacenar datos sustitutos locales.
+- [ ] La navegación por teclado (flechas, Enter, Escape) y atributos de accesibilidad WCAG 2.1 están activos en el mapa y modales.

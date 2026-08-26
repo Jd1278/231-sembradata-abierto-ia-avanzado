@@ -1,33 +1,45 @@
-node_modules
+# Version control
 .git
-.github
-dist
-.output
-.vercel
-.nitro
-.tanstack
-.wrangler
-*.log
+.gitignore
+
+# Environment and secrets (CRITICAL: Never bake secrets into Docker images)
 .env
-.env.local
-.env.production
-RECURSOS
-estructura repositorio
-info bd
-reports
-notebooks
-data/raw
-data/processed
-data/realtime
-data/external
-models
-tests
-docs
-config
-deployments
-.github
-.prettierrc
-.prettierignore
-eslint.config.js
+.env.*
+*.env
+*.local
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs and cache
+.output/
+.vercel/
+dist/
+build/
+.nitro/
+.cache/
+coverage/
+
+# Development and IDE artifacts
+.gemini/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Documentation and tests not needed in runtime
+tests/
+scratch/
 *.md
-instrucciones_Adaptabilidad
+!README.md
+docs/
+deployments/kubernetes/

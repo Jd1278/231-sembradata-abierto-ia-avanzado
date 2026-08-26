@@ -1,22 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { SoilType } from "@/types/crops";
 
 export interface AdvancedFilterValues {
   altitudeRange: [number, number];
   tempRange: [number, number];
   precipRange: [number, number];
-  soilType: string;
+  soilType: SoilType;
 }
 
 const DEFAULT_FILTERS: AdvancedFilterValues = {
   altitudeRange: [0, 4000],
   tempRange: [10, 35],
   precipRange: [0, 4000],
-  soilType: "all",
+  soilType: "all" as SoilType,
 };
 
-const SOIL_TYPES = [
+const SOIL_TYPES: { value: SoilType; label: string }[] = [
   { value: "all", label: "Todos" },
   { value: "arcilla", label: "Arcilla" },
   { value: "limo", label: "Limo" },
@@ -89,7 +90,20 @@ export function AdvancedFilters({
   onChange: (v: AdvancedFilterValues) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<AdvancedFilterValues>(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
   const hasChanges =
+    draft.altitudeRange[0] !== value.altitudeRange[0] ||
+    draft.altitudeRange[1] !== value.altitudeRange[1] ||
+    draft.tempRange[0] !== value.tempRange[0] ||
+    draft.tempRange[1] !== value.tempRange[1] ||
+    draft.precipRange[0] !== value.precipRange[0] ||
+    draft.precipRange[1] !== value.precipRange[1] ||
+    draft.soilType !== value.soilType;
+  const isDirty =
     value.altitudeRange[0] !== DEFAULT_FILTERS.altitudeRange[0] ||
     value.altitudeRange[1] !== DEFAULT_FILTERS.altitudeRange[1] ||
     value.tempRange[0] !== DEFAULT_FILTERS.tempRange[0] ||
@@ -107,7 +121,7 @@ export function AdvancedFilters({
         <span className="flex items-center gap-2">
           <SlidersHorizontal className="h-3.5 w-3.5" />
           Filtros avanzados
-          {hasChanges && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+          {isDirty && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
         </span>
         <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
       </button>
@@ -119,8 +133,8 @@ export function AdvancedFilters({
             <RangeSlider
               min={0}
               max={4000}
-              value={value.altitudeRange}
-              onChange={(v) => onChange({ ...value, altitudeRange: v })}
+              value={draft.altitudeRange}
+              onChange={(v) => setDraft({ ...draft, altitudeRange: v })}
               unit=" m"
             />
           </div>
@@ -132,8 +146,8 @@ export function AdvancedFilters({
             <RangeSlider
               min={0}
               max={45}
-              value={value.tempRange}
-              onChange={(v) => onChange({ ...value, tempRange: v })}
+              value={draft.tempRange}
+              onChange={(v) => setDraft({ ...draft, tempRange: v })}
               unit="°C"
             />
           </div>
@@ -145,8 +159,8 @@ export function AdvancedFilters({
             <RangeSlider
               min={0}
               max={4000}
-              value={value.precipRange}
-              onChange={(v) => onChange({ ...value, precipRange: v })}
+              value={draft.precipRange}
+              onChange={(v) => setDraft({ ...draft, precipRange: v })}
               unit=" mm"
             />
           </div>
@@ -159,10 +173,10 @@ export function AdvancedFilters({
               {SOIL_TYPES.map((soil) => (
                 <button
                   key={soil.value}
-                  onClick={() => onChange({ ...value, soilType: soil.value })}
+                  onClick={() => setDraft({ ...draft, soilType: soil.value })}
                   className={cn(
                     "rounded-lg px-2.5 py-1 text-[11px] font-medium transition-all",
-                    value.soilType === soil.value
+                    draft.soilType === soil.value
                       ? "bg-primary text-primary-foreground shadow-sm"
                       : "bg-muted text-muted-foreground hover:bg-muted/80",
                   )}
@@ -175,7 +189,21 @@ export function AdvancedFilters({
 
           {hasChanges && (
             <button
-              onClick={() => onChange(DEFAULT_FILTERS)}
+              onClick={() => {
+                onChange(draft);
+              }}
+              className="w-full rounded-lg bg-primary py-2 text-[11px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Aplicar Filtros
+            </button>
+          )}
+
+          {isDirty && (
+            <button
+              onClick={() => {
+                setDraft(DEFAULT_FILTERS);
+                onChange(DEFAULT_FILTERS);
+              }}
               className="w-full rounded-lg border border-border py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted"
             >
               Limpiar filtros

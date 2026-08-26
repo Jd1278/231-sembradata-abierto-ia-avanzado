@@ -35,13 +35,13 @@ The `metadata.json` file contains pipeline configuration, scheduling, and table 
 
 ## External Data Sources (5 APIs) + AI + Backend
 
-| Source                 | Type                  | Frequency | Service File                              |
-| ---------------------- | --------------------- | --------- | ----------------------------------------- |
-| Open-Meteo             | Climate               | Real-time | `src/services/climate-api.ts`             |
-| NASA POWER             | Satellite             | Daily     | `src/services/nasa-power.ts`              |
-| IDEAM (datos.gov.co)   | Meteorological        | Daily     | `src/services/ideam.ts`                   |
-| SoilGrids (ISRIC)      | Soil properties       | Static    | `src/services/soil-service.ts`            |
-| Commodity Forecast     | Market prices         | Hourly    | `src/services/commodity-price.ts`         |
-| Groq (Llama 3.1 8B)    | Chatbot AI (server-side) | Real-time | `supabase/functions/chat`               |
-| Supabase               | Cache, history, Edge Functions | Real-time | `src/services/cache.ts`, `src/services/supabase.ts` |
-| **GeoJSON Colombia**   | **Municipios Santander (87)**| **Static**| **`src/data/colombia-municipios.geo.json`**|
+| Source               | Type                           | Frequency  | Service File                                        |
+| -------------------- | ------------------------------ | ---------- | --------------------------------------------------- |
+| Open-Meteo           | Climate                        | Real-time  | `src/services/climate-api.ts`                       |
+| NASA POWER           | Satellite                      | Daily      | `src/services/nasa-power.ts`                        |
+| IDEAM (datos.gov.co) | Meteorological                 | Daily      | `src/services/ideam.ts`                             |
+| SoilGrids (ISRIC)    | Soil properties                | Static     | `src/services/soil-service.ts`                      |
+| Commodity Forecast   | Market prices                  | Hourly     | `src/services/commodity-price.ts`                   |
+| Groq (Llama 3.1 8B)  | Chatbot AI (server-side)       | Real-time  | `supabase/functions/chat`                           |
+| Supabase             | Cache, history, Edge Functions | Real-time  | `src/services/cache.ts`, `src/services/supabase.ts` |
+| **GeoJSON Colombia** | **Municipios Santander (87)**  | **Static** | **`src/data/colombia-municipios.geo.json`**         |

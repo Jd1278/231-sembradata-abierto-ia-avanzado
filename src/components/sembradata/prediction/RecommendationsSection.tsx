@@ -27,16 +27,16 @@ export function RecommendationsSection({ recommendations, alternatives }: Props)
       </Card>
 
       {/* Alternative crops */}
-      {alternatives.length > 0 && (
-        <Card className="rounded-2xl">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">Cultivos Alternativos</CardTitle>
-            <p className="text-[11px] text-muted-foreground">
-              Cultivos recomendados para esta zona
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {alternatives.map((alt, i) => (
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold">Cultivos Alternativos</CardTitle>
+          <p className="text-[11px] text-muted-foreground">
+            Cultivos recomendados según condiciones agroclimáticas
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {alternatives.length > 0 ? (
+            alternatives.map((alt, i) => (
               <div
                 key={i}
                 className="rounded-xl border border-border p-3 transition-colors hover:bg-muted/30"
@@ -54,10 +54,15 @@ export function RecommendationsSection({ recommendations, alternatives }: Props)
                   Rendimiento estimado: {alt.estimatedYield}
                 </p>
               </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+            ))
+          ) : (
+            <p className="text-xs text-muted-foreground italic">
+              No se encontraron cultivos suficientemente compatibles con las condiciones climáticas
+              actuales de esta zona.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </>
   );
 }

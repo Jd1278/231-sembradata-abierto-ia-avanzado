@@ -29,12 +29,12 @@ Desarrollar una plataforma de predicción agroclimática basada en inteligencia 
 
 La plataforma cubre los 87 municipios del departamento de Santander, agrupados en las siguientes provincias:
 
-| Provincia | Municipios Destacados | Cultivos Principales |
-| :-------- | :-------------------- | :------------------ |
-| **Comunera** | Socorro, San Gil, Barichara | Café, cacao, granadilla |
-| **Guanentá** | San José de Miranda, Enciso | Café, caña, frutales |
-| **Soto** | Bucaramanga, Piedecuesta, Floridablanca | Café, hortalizas |
-| **Vélez** | Vélez, Bolívar, Landázuri | Café, cacao |
-| **Caribe** | Puerto Wilches, Sabana de Torres | Cacao, palma, ganadería |
-| **Mares** | Barrancabermeja, San Vicente de Chucurí | Cacao, café, palma |
-| **García Rovira** | Málaga, Concepción, Cerrito | Café, granadilla, frutales |
+| Provincia         | Municipios Destacados                   | Cultivos Principales       |
+| :---------------- | :-------------------------------------- | :------------------------- |
+| **Comunera**      | Socorro, San Gil, Barichara             | Café, cacao, granadilla    |
+| **Guanentá**      | San José de Miranda, Enciso             | Café, caña, frutales       |
+| **Soto**          | Bucaramanga, Piedecuesta, Floridablanca | Café, hortalizas           |
+| **Vélez**         | Vélez, Bolívar, Landázuri               | Café, cacao                |
+| **Caribe**        | Puerto Wilches, Sabana de Torres        | Cacao, palma, ganadería    |
+| **Mares**         | Barrancabermeja, San Vicente de Chucurí | Cacao, café, palma         |
+| **García Rovira** | Málaga, Concepción, Cerrito             | Café, granadilla, frutales |

@@ -71,9 +71,10 @@ export function getMinRelevantYear(): number {
 
 export function getAvailableYears(): number[] {
   const currentYear = new Date().getFullYear();
+  const maxYear = Math.max(currentYear, 2027);
   const minYear = getMinRelevantYear();
   const years: number[] = [];
-  for (let y = currentYear; y >= minYear; y--) {
+  for (let y = maxYear; y >= minYear; y--) {
     years.push(y);
   }
   return years;

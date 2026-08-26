@@ -1,3 +1,15 @@
+import {
+  calculateClimateMetrics,
+  type CalculatedClimateMetrics,
+  type DataQuality,
+} from "./climate-calculator";
+
+export interface MonthlyPrecipitation {
+  year: number;
+  month: number;
+  precipitation: number;
+}
+
 export interface ClimateData {
   temperature: number;
   temperatureMax: number;
@@ -12,7 +24,16 @@ export interface ClimateData {
   pressure: number;
   evapotranspiration: number;
   dailyData: DailyClimate[];
+  monthlyPrecipitation: MonthlyPrecipitation[];
   agriculturalIndex: AgriculturalIndices;
+  metrics?: CalculatedClimateMetrics;
+  thermalRange?: number | null;
+  temperatureStdDev?: number | null;
+  precipitationStdDev?: number | null;
+  precipitationCv?: number | null;
+  waterBalance?: number | null;
+  waterDeficit?: number | null;
+  dataQuality?: DataQuality;
 }
 
 export interface DailyClimate {
@@ -24,6 +45,7 @@ export interface DailyClimate {
   windSpeed: number;
   solarRad: number;
   uvIndex: number;
+  et0?: number;
 }
 
 export interface HistoricalSummary {
@@ -46,7 +68,44 @@ export interface AgriculturalIndices {
 }
 
 const BASE_URL = "https://api.open-meteo.com/v1";
+const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
 const FETCH_TIMEOUT_MS = 15000;
+const MAX_RETRIES = 2;
+
+const responseCache = new Map<string, { data: unknown; at: number }>();
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes TTL
+
+function cacheKey(url: string): string {
+  return url;
+}
+
+function getCached<T>(url: string): T | null {
+  const entry = responseCache.get(cacheKey(url));
+  if (!entry) return null;
+  if (Date.now() - entry.at > CACHE_TTL_MS) {
+    responseCache.delete(cacheKey(url));
+    return null;
+  }
+  return entry.data as T;
+}
+
+function setCache(url: string, data: unknown): void {
+  if (responseCache.size > 100) {
+    const now = Date.now();
+    for (const [key, entry] of responseCache) {
+      if (now - entry.at > CACHE_TTL_MS) responseCache.delete(key);
+    }
+  }
+  if (responseCache.size > 200) {
+    const oldest = responseCache.keys().next().value;
+    if (oldest) responseCache.delete(oldest);
+  }
+  responseCache.set(cacheKey(url), { data, at: Date.now() });
+}
+
+export function clearClimateCache(): void {
+  responseCache.clear();
+}
 
 async function fetchWithTimeout(url: string, options?: RequestInit): Promise<Response> {
   const controller = new AbortController();
@@ -58,13 +117,34 @@ async function fetchWithTimeout(url: string, options?: RequestInit): Promise<Res
     clearTimeout(timeout);
   }
 }
-const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
+
+async function fetchWithRetry(url: string, options?: RequestInit): Promise<Response> {
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url, options);
+      if (res.ok) return res;
+      if (res.status >= 500 && attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      }
+    }
+  }
+  throw lastError ?? new Error("Fetch failed after retries");
+}
 
 const DAILY_FIELDS = [
   "temperature_2m_max",
   "temperature_2m_min",
   "precipitation_sum",
   "relative_humidity_2m_mean",
+  "et0_fao_evapotranspiration",
   "wind_speed_10m_mean",
   "shortwave_radiation_sum",
   "uv_index_max",
@@ -100,39 +180,105 @@ function mapDailyData(raw: {
   temperature_2m_min: number[];
   precipitation_sum: number[];
   relative_humidity_2m_mean: number[];
-  wind_speed_10m_mean: number[];
-  shortwave_radiation_sum: number[];
-  uv_index_max: number[];
+  et0_fao_evapotranspiration?: number[];
+  wind_speed_10m_mean?: number[];
+  shortwave_radiation_sum?: number[];
+  uv_index_max?: number[];
 }): DailyClimate[] {
-  return raw.time.map((date, i) => ({
-    date,
-    tempMax: raw.temperature_2m_max?.[i] ?? 0,
-    tempMin: raw.temperature_2m_min?.[i] ?? 0,
-    precip: raw.precipitation_sum?.[i] ?? 0,
-    humidity: raw.relative_humidity_2m_mean?.[i] ?? 0,
-    windSpeed: raw.wind_speed_10m_mean?.[i] ?? 0,
-    solarRad: raw.shortwave_radiation_sum?.[i] ?? 0,
-    uvIndex: raw.uv_index_max?.[i] ?? 0,
-  }));
+  const result: DailyClimate[] = [];
+  for (let i = 0; i < raw.time.length; i++) {
+    if (raw.temperature_2m_max?.[i] == null || raw.temperature_2m_min?.[i] == null) continue;
+    result.push({
+      date: raw.time[i],
+      tempMax: raw.temperature_2m_max[i],
+      tempMin: raw.temperature_2m_min[i],
+      precip: raw.precipitation_sum?.[i] ?? 0,
+      humidity: raw.relative_humidity_2m_mean?.[i] ?? 0,
+      windSpeed: raw.wind_speed_10m_mean?.[i] ?? 0,
+      solarRad: raw.shortwave_radiation_sum?.[i] ?? 0,
+      uvIndex: raw.uv_index_max?.[i] ?? 0,
+      et0: raw.et0_fao_evapotranspiration?.[i],
+    });
+  }
+  return result;
+}
+
+function parseYearMonth(dateStr: string): { year: number; month: number } {
+  const parts = dateStr.split("-");
+  return { year: Number(parts[0]), month: Number(parts[1]) };
+}
+
+export function aggregateMonthlyPrecipitation(dailyData: DailyClimate[]): MonthlyPrecipitation[] {
+  const map = new Map<string, number>();
+  for (const d of dailyData) {
+    const { year, month } = parseYearMonth(d.date);
+    const key = `${year}-${month}`;
+    map.set(key, (map.get(key) ?? 0) + (d.precip ?? 0));
+  }
+  const result: MonthlyPrecipitation[] = [];
+  for (const [key, precip] of map) {
+    const [yearStr, monthStr] = key.split("-");
+    result.push({
+      year: Number(yearStr),
+      month: Number(monthStr),
+      precipitation: +precip.toFixed(1),
+    });
+  }
+  result.sort((a, b) => a.year - b.year || a.month - b.month);
+  return result;
 }
 
 function computeAgriculturalIndices(
   dailyData: DailyClimate[],
   avgTemp: number,
-  avgPrecip: number,
-  avgHumidity: number,
+  _avgPrecip: number,
+  _avgHumidity: number,
+  monthlyPrecipitation: MonthlyPrecipitation[],
 ): AgriculturalIndices {
   const gdd = dailyData.reduce((sum, d) => {
     const avg = (d.tempMax + d.tempMin) / 2;
     return sum + Math.max(0, avg - 10);
   }, 0);
-  const monthlyPrecip = avgPrecip * 30;
+
+  const Ra = 4.5;
+  let totalPet = 0;
+  for (const d of dailyData) {
+    if (d.et0 !== undefined && d.et0 !== null && Number.isFinite(d.et0)) {
+      totalPet += d.et0;
+    } else {
+      const tMean = (d.tempMax + d.tempMin) / 2;
+      const tRange = Math.max(0.1, d.tempMax - d.tempMin);
+      totalPet += 0.0023 * Math.sqrt(tRange) * (tMean + 17.8) * Ra;
+    }
+  }
+  const totalPrecip = dailyData.reduce((sum, d) => sum + d.precip, 0);
+
+  const lastMonth =
+    monthlyPrecipitation.length > 0 ? monthlyPrecipitation[monthlyPrecipitation.length - 1] : null;
+  const recentMonthlyPrecip = lastMonth ? lastMonth.precipitation : 0;
+
+  const ratio = totalPet > 0 ? totalPrecip / totalPet : totalPrecip > 0 ? 2 : 0;
+
+  let dryDays = 0;
+  for (const d of dailyData) {
+    const pet =
+      d.et0 ??
+      0.0023 *
+        Math.sqrt(Math.max(0.1, d.tempMax - d.tempMin)) *
+        ((d.tempMax + d.tempMin) / 2 + 17.8) *
+        Ra;
+    if (d.precip < pet * 0.5) dryDays++;
+  }
+  const moistureStress = dailyData.length > 0 ? dryDays / dailyData.length : 0;
+
   return {
     GrowingDegreeDays: +gdd.toFixed(1),
-    aridityIndex: +(monthlyPrecip > 0 ? monthlyPrecip / (gdd * 0.002 + 0.5) : 0).toFixed(2),
-    moistureStressIndex: +(avgHumidity < 40 ? 1 : avgHumidity < 60 ? 0.5 : 0).toFixed(2),
+    aridityIndex: +Math.min(8, ratio).toFixed(2),
+    moistureStressIndex: +moistureStress.toFixed(2),
     frostRisk: +(dailyData.some((d) => d.tempMin < 2) ? 0.8 : 0).toFixed(2),
-    droughtRisk: +(monthlyPrecip < 30 ? 0.9 : monthlyPrecip < 60 ? 0.5 : 0.1).toFixed(2),
+    droughtRisk: +(recentMonthlyPrecip < 50 ? 0.9 : recentMonthlyPrecip < 100 ? 0.5 : 0.1).toFixed(
+      2,
+    ),
   };
 }
 
@@ -141,6 +287,7 @@ export async function fetchCurrentClimate(
   lng: number,
   pastDays = 90,
 ): Promise<ClimateData> {
+  const effectivePastDays = Math.min(pastDays, 93);
   const params = new URLSearchParams({
     latitude: lat.toString(),
     longitude: lng.toString(),
@@ -158,14 +305,39 @@ export async function fetchCurrentClimate(
     daily: DAILY_FIELDS,
     timezone: "America/Bogota",
     forecast_days: "7",
-    past_days: String(pastDays),
+    past_days: String(effectivePastDays),
   });
 
-  const res = await fetchWithTimeout(`${BASE_URL}/forecast?${params}`);
-  if (!res.ok) throw new Error(`Climate API error: ${res.status}`);
-  const data = await res.json();
-  const current = data.current;
-  const dailyData = mapDailyData(data.daily);
+  const url = `${BASE_URL}/forecast?${params}`;
+  let data: Record<string, unknown>;
+  const cached = getCached<Record<string, unknown>>(url);
+  if (cached) {
+    data = cached;
+  } else {
+    const res = await fetchWithRetry(url);
+    if (!res.ok) throw new Error(`Climate API error: ${res.status}`);
+    data = (await res.json()) as Record<string, unknown>;
+    setCache(url, data);
+  }
+  const current = (data.current ?? {}) as Record<string, number>;
+  const dailyRaw = data.daily as Record<string, unknown[]> | undefined;
+  if (!dailyRaw?.time) throw new Error("Invalid climate API response: missing daily.time");
+  const dailyData = mapDailyData(dailyRaw as Parameters<typeof mapDailyData>[0]);
+
+  const metrics = calculateClimateMetrics(
+    dailyData.map((d) => ({
+      date: d.date,
+      tempMax: d.tempMax,
+      tempMin: d.tempMin,
+      precip: d.precip,
+      humidity: d.humidity,
+      windSpeed: d.windSpeed,
+      solarRad: d.solarRad,
+      uvIndex: d.uvIndex,
+      et0: d.et0,
+    })),
+    { source: "Open-Meteo", expectedDays: effectivePastDays + 7, latitude: lat },
+  );
 
   let tempSum = 0,
     precipSum = 0,
@@ -187,23 +359,39 @@ export async function fetchCurrentClimate(
   const avgPrecip = len ? precipSum / len : 0;
   const avgHumidity = len ? humSum / len : 0;
   const avgSolarRad = len ? solarSum / len : 0;
-  const gdd = Math.max(0, avgTemp - 10);
+
+  const monthlyPrecipitation = aggregateMonthlyPrecipitation(dailyData);
 
   return {
-    temperature: current.temperature_2m ?? avgTemp,
+    temperature: current.temperature_2m ?? metrics.meanTemperature ?? avgTemp,
     temperatureMax: len ? maxTemp : (current.temperature_2m ?? 0),
     temperatureMin: len ? minTemp : (current.temperature_2m ?? 0),
-    humidity: current.relative_humidity_2m ?? avgHumidity,
-    precipitation: current.precipitation ?? avgPrecip,
+    humidity: current.relative_humidity_2m ?? metrics.meanHumidity ?? avgHumidity,
+    precipitation: avgPrecip || (current.precipitation ?? 0),
     windSpeed: current.wind_speed_10m ?? 0,
     windDirection: current.wind_direction_10m ?? 0,
-    solarRadiation: current.shortwave_radiation ?? avgSolarRad,
+    solarRadiation: avgSolarRad,
     uvIndex: current.uv_index ?? 0,
     cloudCover: current.cloud_cover ?? 0,
     pressure: current.surface_pressure ?? 1013,
-    evapotranspiration: +(gdd * 0.15).toFixed(1),
+    evapotranspiration: metrics.evapotranspiration ?? 0,
     dailyData,
-    agriculturalIndex: computeAgriculturalIndices(dailyData, avgTemp, avgPrecip, avgHumidity),
+    monthlyPrecipitation,
+    agriculturalIndex: computeAgriculturalIndices(
+      dailyData,
+      avgTemp,
+      avgPrecip,
+      avgHumidity,
+      monthlyPrecipitation,
+    ),
+    metrics,
+    thermalRange: metrics.thermalRange,
+    temperatureStdDev: metrics.temperatureStdDev,
+    precipitationStdDev: metrics.precipitationStdDev,
+    precipitationCv: metrics.precipitationCv,
+    waterBalance: metrics.waterBalance,
+    waterDeficit: metrics.waterDeficit,
+    dataQuality: metrics.dataQuality,
   };
 }
 
@@ -222,10 +410,21 @@ export async function fetchHistoricalClimate(
     timezone: "America/Bogota",
   });
 
-  const res = await fetchWithTimeout(`${ARCHIVE_URL}?${params}`);
-  if (!res.ok) throw new Error(`Historical climate API error: ${res.status}`);
-  const data = await res.json();
-  const dailyData = mapDailyData(data.daily);
+  const url = `${ARCHIVE_URL}?${params}`;
+  let data: Record<string, unknown>;
+  const cached = getCached<Record<string, unknown>>(url);
+  if (cached) {
+    data = cached;
+  } else {
+    const res = await fetchWithRetry(url);
+    if (!res.ok) throw new Error(`Historical climate API error: ${res.status}`);
+    data = (await res.json()) as Record<string, unknown>;
+    setCache(url, data);
+  }
+  const dailyRaw = data.daily as Record<string, unknown[]> | undefined;
+  if (!dailyRaw?.time)
+    throw new Error("Invalid historical climate API response: missing daily.time");
+  const dailyData = mapDailyData(dailyRaw as Parameters<typeof mapDailyData>[0]);
 
   let tempSum = 0,
     precipSum = 0,
@@ -255,6 +454,8 @@ export async function fetchHistoricalClimate(
   const avgUv = len ? uvSum / len : 0;
   const gdd = Math.max(0, avgTemp - 10);
 
+  const monthlyPrecipitation = aggregateMonthlyPrecipitation(dailyData);
+
   return {
     temperature: avgTemp,
     temperatureMax: len ? maxTemp : 0,
@@ -269,7 +470,14 @@ export async function fetchHistoricalClimate(
     pressure: 1013,
     evapotranspiration: +(gdd * 0.15).toFixed(1),
     dailyData,
-    agriculturalIndex: computeAgriculturalIndices(dailyData, avgTemp, avgPrecip, avgHumidity),
+    monthlyPrecipitation,
+    agriculturalIndex: computeAgriculturalIndices(
+      dailyData,
+      avgTemp,
+      avgPrecip,
+      avgHumidity,
+      monthlyPrecipitation,
+    ),
   };
 }
 
@@ -283,10 +491,20 @@ export async function fetchRecentHistory(lat: number, lng: number): Promise<Hist
     forecast_days: "0",
   });
 
-  const res = await fetchWithTimeout(`${BASE_URL}/forecast?${params}`);
-  if (!res.ok) throw new Error(`Climate API error: ${res.status}`);
-  const data = await res.json();
-  const dailyData = mapDailyData(data.daily);
+  const url = `${BASE_URL}/forecast?${params}`;
+  let data: Record<string, unknown>;
+  const cached = getCached<Record<string, unknown>>(url);
+  if (cached) {
+    data = cached;
+  } else {
+    const res = await fetchWithRetry(url);
+    if (!res.ok) throw new Error(`Climate API error: ${res.status}`);
+    data = (await res.json()) as Record<string, unknown>;
+    setCache(url, data);
+  }
+  const dailyRaw = data.daily as Record<string, unknown[]> | undefined;
+  if (!dailyRaw?.time) throw new Error("Invalid climate API response: missing daily.time");
+  const dailyData = mapDailyData(dailyRaw as Parameters<typeof mapDailyData>[0]);
 
   let tempSum = 0,
     precipSum = 0,

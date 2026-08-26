@@ -25,136 +25,95 @@
 
 ```
 Frontend:      React 19 + TanStack Start + Tailwind CSS 4 + TypeScript 5.8
-Backend:       Supabase (PostgreSQL + Edge Functions + Auth)
-Server Engine: Nitro (UnJS) via TanStack Start
+Backend:       Supabase (PostgreSQL + Edge Functions Deno + RLS Hardening 009)
+Server Engine: Nitro (UnJS) via TanStack Start (Node 22 Alpine)
 Build:         Vite 8
 Testing:       Vitest (unit) + Playwright (E2E)
-Deploy:        Render / Docker / Kubernetes
+Deploy:        Vercel / Docker / Kubernetes / Render
 Monitoreo:     Sentry
-Chatbot:       Groq (Llama 3.1 8B) via Supabase Edge Function + RAG
+Modelos IA:    Groq (openai/gpt-oss-20b) + Google Gemini 2.0 Flash (Edge Functions)
+Pronóstico:    Theil-Sen Robust Estimator con Intervalos L80/U80/L95/U95
 ```
 
 ---
 
-## 2. APIs Climaticas y de Suelo
+## 2. APIs Climáticas y de Suelo
 
-### 2.1 Open-Meteo — Pronostico y Historico Climatico
+### 2.1 Open-Meteo — Pronóstico e Histórico Climático
 
 - **Sitio web:** [https://open-meteo.com](https://open-meteo.com)
-- **Documentacion:** [https://open-meteo.com/en/docs](https://open-meteo.com/en/docs)
+- **Documentación:** [https://open-meteo.com/en/docs](https://open-meteo.com/en/docs)
 - **Endpoints utilizados:**
-  - `https://api.open-meteo.com/v1/forecast` — Pronostico actual + 7 dias
-  - `https://archive-api.open-meteo.com/v1/archive` — Datos historicos
-- **Autenticacion:** No requiere API key
-- **Limite de tasa:** 60 requests/minuto
-- **Parametros consultados:** `temperature_2m_max`, `temperature_2m_min`, `precipitation_sum`, `relative_humidity_2m_mean`, `wind_speed_10m_mean`, `shortwave_radiation_sum`, `uv_index_max`, `soil_moisture_0_to_7cm`, `soil_moisture_7_to_28cm`
-- **Funcion en el proyecto:** Fuente principal de datos climaticos en tiempo real y pronosticos a 7 dias. Calcula indices agricolas (GDD, aridity, frost risk, drought risk). Tambien提供 datos historicos para validacion de modelos.
-- **Archivo fuente:** `src/services/climate-api.ts`
+  - `https://api.open-meteo.com/v1/forecast` — Clima en tiempo real y pronóstico a 7 días
+  - `https://archive-api.open-meteo.com/v1/archive` — Datos históricos
+- **Autenticación:** No requiere API key
+- **Función en el proyecto:** Monitoreo meteorológico en vivo (temperatura, precipitación, humedad, viento, balance hídrico).
 
-### 2.2 NASA POWER — Datos Agroclimaticos por Satelite
+### 2.2 NASA POWER — Datos Agroclimáticos por Satélite
 
 - **Sitio web:** [https://power.larc.nasa.gov](https://power.larc.nasa.gov)
-- **Documentacion:** [https://power.larc.nasa.gov/data-access-viewer](https://power.larc.nasa.gov/data-access-viewer)
 - **Endpoint utilizado:** `https://power.larc.nasa.gov/api/temporal/daily/point`
-- **Autenticacion:** No requiere API key
-- **Limite de tasa:** 10 requests/minuto
-- **Parametros consultados (22):** `T2M`, `T2M_MAX`, `T2M_MIN`, `PRECTOTCORR`, `RH2M`, `WS2M`, `WS2M_MAX`, `WS2M_MIN`, `WD2M`, `ALLSKY_SFC_SW_DWN`, `EVPTRNS`, `T2MDEW`, `TS`, `ALLSKY_KT`, `ALLSKY_SFC_LW_DWN`, `GDD0`, `GDD10`, `CDD0`, `HDD0`, `PET`, etc.
-- **Funcion en el proyecto:** Proporciona datos agroclimaticos de alta resolucion espacial para el departamento de Santander. Calcula indices como demanda de agua, estres termico, dias sin helada y evapotranspiracion de referencia.
-- **Archivo fuente:** `src/services/nasa-power.ts`
+- **Parámetros agronómicos (15 oficiales):** `T2M, T2M_MAX, T2M_MIN, PRECTOTCORR, RH2M, WS2M, WS2M_MAX, WS2M_MIN, WD2M, ALLSKY_SFC_SW_DWN, EVPTRNS, T2MDEW, TS, ALLSKY_KT, ALLSKY_SFC_LW_DWN` (estrictamente ajustados al límite $\le 20$ de NASA POWER).
+- **Función en el proyecto:** Radiación solar diaria, evapotranspiración de referencia ($ET_0$), índices de radiación y balance agroclimático.
 
-### 2.3 SoilGrids / ISRIC — Propiedades del Suelo Global
+### 2.3 SoilGrids (ISRIC) — Propiedades Pedológicas
 
 - **Sitio web:** [https://soilgrids.org](https://soilgrids.org)
-- **Documentacion:** [https://rest.isric.org/soilgrids/v2.0/docs](https://rest.isric.org/soilgrids/v2.0/docs)
 - **Endpoint utilizado:** `https://rest.isric.org/soilgrids/v2.0/properties/query`
-- **Autenticacion:** No requiere API key
-- **Limite de tasa:** 30 requests/minuto
-- **Propiedades consultadas:** `clay`, `sand`, `silt`, `phh2o` (pH), `soc` (carbono organico), `cfvo` (fragmentos de roca)
-- **Profundidades disponibles:** `0-5cm`, `5-15cm`, `15-30cm`, `30-60cm`, `60-100cm`, `100-200cm`
-- **Funcion en el proyecto:** Determina las propiedades fisicas y quimicas del suelo en cualquier coordenada de Santander. Calcula textura, drenaje, fertilidad, riesgo de erosion y capacidad de retencion de agua. Esencial para evaluar la viabilidad de cultivos.
-- **Archivo fuente:** `src/services/soil-service.ts`
+- **Función en el proyecto:** Perfiles de suelo por profundidad (pH, materia orgánica, textura arcilla/arena/limo).
 
-### 2.4 IDEAM — Instituto de Hidrologia, Meteorologia y Estudios Ambientales
+### 2.4 IDEAM — Estaciones Meteorológicas Oficiales
 
-- **Sitio web:** [https://www.ideam.gov.co](https://www.ideam.gov.co)
-- **Portal de datos abiertos:** [https://www.datos.gov.co](https://www.datos.gov.co)
-- **API Socrata (datos.gov.co):** `https://www.datos.gov.co/resource`
-- **Datasets consultados (ver seccion 4 para detalle completo)**
-- **Autenticacion:** Token de aplicacion (opcional pero recomendado) — `VITE_IDEAM_APP_TOKEN`
-- **Limite de tasa:** 30 requests/minuto
-- **Paginacion:** 1000 registros por pagina con offset automatico
-- **Funcion en el proyecto:** Proporciona datos historicos de estaciones meteorologicas colombianas: temperatura, humedad, precipitacion, viento, presion atmosferica y radiacion solar. Los datos se almacenan en cache de Supabase con TTL de 24 horas.
-- **Archivo fuente:** `src/services/ideam.ts`
+- **Portal:** [datos.gov.co](https://datos.gov.co) (Socrata Open Data)
+- **Función en el proyecto:** Observaciones reales de estaciones climatológicas en Santander.
 
 ---
 
 ## 3. APIs de Datos de Mercado
 
-### 3.1 Commodity Forecast (Untitled Financial) — Pronostico de Precios
+### 3.1 Commodity Forecast API & Referencias de Mercado
 
-- **Sitio web:** [https://www.untitledfinancial.com](https://www.untitledfinancial.com)
-- **Endpoint utilizado:** `https://forecast.untitledfinancial.com/forecast/commodity/{symbol}`
-- **Simbolos utilizados:** `COFFEE`, `COCOA`
-- **Autenticacion:** No requiere API key
-- **Limite de tasa:** 20 requests/minuto
-- **Funcion en el proyecto:** Proporciona pronosticos de precios de materias primas agricolas (cafe y cacao). Se usa para generar recomendaciones de siembra basadas en tendencias de mercado.
-- **Archivo fuente:** `src/services/commodity-price.ts`
-
----
-
-## 4. Datasets de Datos Abiertos (datos.gov.co)
-
-### 4.1 Datasets IDEAM usados en el codigo fuente
-
-| Dataset ID | Nombre | Endpoint Socrata | Uso |
-|---|---|---|---|
-| `57sv-p2fu` | IDEAM Estaciones Meteorologicas | `https://www.datos.gov.co/resource/57sv-p2fu.json` | Coordenadas y metadatos de estaciones |
-| `uext-mhny` | IDEAM Observaciones Meteorologicas | `https://www.datos.gov.co/resource/uext-mhny.json` | Observaciones historicas (temp, hum, precip) |
-| `53sq-cmp3` | IDEAM Series Historicas Climaticas | `https://www.datos.gov.co/resource/53sq-cmp3.json` | Series temporales para pipeline ETL |
+- **Endpoint en vivo:** `https://forecast.untitledfinancial.com/forecast/commodity/{COFFEE|COCOA}`
+- **Instrumentos internacionales:**
+  - **Cacao:** ICE US Cocoa (CC) — Futuros de Nueva York en USD/MT.
+  - **Café:** ICE US Coffee C (KC) — Futuros de Nueva York en ¢/lb.
+- **Instrumento nacional:**
+  - **Granadilla:** Mercado nacional mayorista DANE / SIPSA (Centroabastos Bucaramanga).
+- **Estrategia de Resiliencia (_Stale-While-Revalidate_):**
+  - Si el proveedor en vivo entrega señales climáticas pero `currentPrice: null`, se fusionan las señales climáticas en vivo con la última cotización real en caché persistente (`commodity_cache` en Supabase / FRED / ICE).
+  - Cada commodity se consulta de manera independiente mediante `Promise.allSettled`.
 
 ---
 
-## 5. Servicios de Backend y Base de Datos
+## 4. Servicios de Backend y Base de Datos
 
-### 5.1 Supabase — Backend como Servicio (BaaS)
+### 4.1 Supabase (PostgreSQL + Edge Functions)
 
-- **Sitio web:** [https://supabase.com](https://supabase.com)
-- **Documentacion:** [https://supabase.com/docs](https://supabase.com/docs)
-- **Cliente:** `@supabase/supabase-js` v2.49.0
-- **Variables de entorno:** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-- **Componentes utilizados:**
-  - **PostgreSQL:** Base de datos relacional para almacenar datos de municipios, cultivos, clima, rendimiento historico, riesgo y predicciones
-  - **Edge Functions:** Funciones serverless (Deno) para chatbot LLM y limpieza de cache
-  - **Auth:** Autenticacion de usuarios (configurable)
-  - **Realtime:** Actualizaciones en tiempo real (configurable)
+- **PostgreSQL:** Base de datos relacional con Migraciones 001..010 y RLS Hardening.
 - **Tablas principales:**
-  - `municipios` — 87 municipios de Santander con coordenadas
-  - `cultivos` — 7 cultivos principales (cacao, café, granadilla, plátano, yuca, arroz, maíz)
-  - `clima_mensual` — Datos climaticos mensuales por municipio
-  - `rendimiento_historico` — Rendimientos historicos por cultivo y municipio
-  - `riesgo_agroclimatico` — Evaluaciones de riesgo
-  - `predicciones` — Predicciones del modelo
-  - `ideam_cache` — Cache de datos IDEAM (TTL: 24h)
-  - `nasa_power_cache` — Cache de datos NASA POWER (TTL: 7d)
-  - `commodity_cache` — Cache de precios de materias primas (TTL: 1h)
-  - `analysis_history` — Historial de analisis de usuarios
-- **Edge Functions:**
-  - `cache-cleanup` — Limpieza automática de caché expirado
-- **Archivo fuente:** `src/services/supabase.ts`
+  - `municipios`: 87 municipios de Santander con altitud oficial y coordenadas.
+  - `cultivos`: Café, Cacao, Granadilla.
+  - `crop_climate_requirements`: Requerimientos óptimos oficiales (Cenicafé / Fedecacao / AGROSAVIA).
+  - `rendimiento_historico`: Observaciones reales oficiales de EVA / MinAgricultura (2018–2024, Migración 010).
+  - `commodity_cache` / `commodity_prices`: Caché persistente de cotizaciones internacionales de referencia.
+  - `predicciones_agroclimaticas`: Pronósticos estadísticos versionados con intervalos de predicción al 80% y 95%.
+  - `data_quality_quarantine`: Registro de auditoría y aislamiento de anomalías.
+  - `chat_conversations`: Historial de chat con acceso restringido a `service_role`.
+- **Edge Functions (Deno):**
+  - `chat`: Asistente conversacional con Groq (`openai/gpt-oss-20b`), RAG y motor determinista.
+  - `gemini-assessment`: Evaluación agronómica cualitativa con Google Gemini 2.0 Flash.
 
-### 5.2 Chatbot — Groq Llama 3.1 8B (Edge Function)
+### 4.2 Chatbot Agroclimático Trazable (Groq + Supabase)
 
-- **API:** [https://console.groq.com/keys](https://console.groq.com/keys) (gratis, sin tarjeta de crédito)
-- **Función en el proyecto:** Chatbot agroclimático desplegado como Supabase Edge Function. Clasifica intención (CROP_RECOMMENDATION, CROP_RISK_ANALYSIS, CROP_REQUIREMENTS, GENERAL_KNOWLEDGE, GREETING, UNKNOWN), extrae entidades con Llama 3.1 8B y responde con contexto de la base de conocimiento local y datos climáticos en vivo.
-- **Arquitectura:** Edge Function de Deno (`supabase/functions/chat/index.ts`) que recibe mensaje + historial, ejecuta clasificador heurístico + extractor de entidades, construye system prompt dinámico con perfiles de cultivo y datos climáticos/suelo, y consulta Groq (Llama 3.1 8B) vía API compatible con OpenAI.
-- **Variable de entorno:** `GROQ_API_KEY` (secreto en Supabase)
-- **Límite gratuito:** ~30 req/min (suficiente para el chatbot)
-- **Archivos fuente:**
-  - `supabase/functions/chat/index.ts` — Edge Function principal
-  - `src/services/intent-classifier.ts` — Clasificador heurístico de intenciones
-  - `src/services/entity-extractor.ts` — Extracción de entidades por regex (sin API)
-  - `src/services/knowledge-base.ts` — Base de conocimiento de perfiles de cultivo
-  - `src/services/data-orchestrator.ts` — Orquestador de datos climáticos y suelo
+- **Modelo:** Groq Cloud `openai/gpt-oss-20b` en modo JSON estricto (`response_format: { type: "json_object" }`).
+- **Validación:** Geovalidación en base de datos, cotejo anti-alucinaciones contra `verifiedNumbers` y contrato Zod `ChatbotResponseSchema`.
+- **Variable de entorno:** `GROQ_API_KEY` (secreto exclusivo de Supabase Edge Functions).
+
+### 4.3 Evaluador Agronómico Cualitativo (Gemini)
+
+- **Modelo:** Google Gemini 2.0 Flash.
+- **Función:** Evalúa cualitativamente si el rendimiento proyectado es biológicamente viable frente a las condiciones del municipio. **No genera ni altera proyecciones estadísticas numéricas.**
+- **Variable de entorno:** `GEMINI_API_KEY` (secreto exclusivo de Supabase Edge Functions).o
   - `src/services/chatbot.ts` — Sugerencias de preguntas para el chatbot
 
 ---
@@ -180,53 +139,53 @@ Chatbot:       Groq (Llama 3.1 8B) via Supabase Edge Function + RAG
 
 ### Framework y Routing
 
-| Libreria | Version | Funcion | Enlace |
-|---|---|---|---|
-| React | 19.2.0 | Framework de UI declarativo | [react.dev](https://react.dev) |
-| TanStack Start | 1.168.32 | Framework full-stack para React | [tanstack.com/start](https://tanstack.com/start) |
+| Libreria        | Version  | Funcion                         | Enlace                                             |
+| --------------- | -------- | ------------------------------- | -------------------------------------------------- |
+| React           | 19.2.0   | Framework de UI declarativo     | [react.dev](https://react.dev)                     |
+| TanStack Start  | 1.168.32 | Framework full-stack para React | [tanstack.com/start](https://tanstack.com/start)   |
 | TanStack Router | 1.170.16 | Enrutamiento basado en archivos | [tanstack.com/router](https://tanstack.com/router) |
-| TanStack Query | 5.101.1 | Fetching y caching de datos | [tanstack.com/query](https://tanstack.com/query) |
+| TanStack Query  | 5.101.1  | Fetching y caching de datos     | [tanstack.com/query](https://tanstack.com/query)   |
 
 ### UI y Estilos
 
-| Libreria | Version | Funcion | Enlace |
-|---|---|---|---|
-| Tailwind CSS | 4.2.1 | Framework CSS utility-first | [tailwindcss.com](https://tailwindcss.com) |
-| Radix UI | 1.x | Componentes UI accesibles | [radix-ui.com](https://www.radix-ui.com) |
-| shadcn/ui | (via Radix) | Componentes UI pre-construidos | [ui.shadcn.com](https://ui.shadcn.com) |
-| Lucide React | 0.575.0 | Iconografia SVG | [lucide.dev](https://lucide.dev) |
-| class-variance-authority | 0.7.1 | Variantes de componentes | [cva.docs](https://cva.docs) |
-| clsx | 2.1.1 | Constructores de clases condicionales | [github.com/lukeed/clsx](https://github.com/lukeed/clsx) |
-| tailwind-merge | 3.5.0 | Fusion de clases Tailwind | [github.com/dcastil/tailwind-merge](https://github.com/dcastil/tailwind-merge) |
+| Libreria                 | Version     | Funcion                               | Enlace                                                                         |
+| ------------------------ | ----------- | ------------------------------------- | ------------------------------------------------------------------------------ |
+| Tailwind CSS             | 4.2.1       | Framework CSS utility-first           | [tailwindcss.com](https://tailwindcss.com)                                     |
+| Radix UI                 | 1.x         | Componentes UI accesibles             | [radix-ui.com](https://www.radix-ui.com)                                       |
+| shadcn/ui                | (via Radix) | Componentes UI pre-construidos        | [ui.shadcn.com](https://ui.shadcn.com)                                         |
+| Lucide React             | 0.575.0     | Iconografia SVG                       | [lucide.dev](https://lucide.dev)                                               |
+| class-variance-authority | 0.7.1       | Variantes de componentes              | [cva.docs](https://cva.docs)                                                   |
+| clsx                     | 2.1.1       | Constructores de clases condicionales | [github.com/lukeed/clsx](https://github.com/lukeed/clsx)                       |
+| tailwind-merge           | 3.5.0       | Fusion de clases Tailwind             | [github.com/dcastil/tailwind-merge](https://github.com/dcastil/tailwind-merge) |
 
 ### Charts y Visualizacion
 
-| Libreria | Version | Funcion | Enlace |
-|---|---|---|---|
-| Recharts | 2.15.4 | Graficos React basados en D3 | [recharts.org](https://recharts.org) |
-| jsPDF | 4.2.1 | Generacion de PDFs en cliente | [parall.ax/products/jspdf](https://parall.ax/products/jspdf) |
-| html2canvas | (via jspdf) | Captura de HTML a imagen | [html2canvas.hertzen.com](https://html2canvas.hertzen.com) |
-| SheetJS (xlsx) | 0.18.5 | Exportacion a Excel | [sheetjs.com](https://sheetjs.com) |
+| Libreria       | Version     | Funcion                       | Enlace                                                       |
+| -------------- | ----------- | ----------------------------- | ------------------------------------------------------------ |
+| Recharts       | 2.15.4      | Graficos React basados en D3  | [recharts.org](https://recharts.org)                         |
+| jsPDF          | 4.2.1       | Generacion de PDFs en cliente | [parall.ax/products/jspdf](https://parall.ax/products/jspdf) |
+| html2canvas    | (via jspdf) | Captura de HTML a imagen      | [html2canvas.hertzen.com](https://html2canvas.hertzen.com)   |
+| SheetJS (xlsx) | 0.18.5      | Exportacion a Excel           | [sheetjs.com](https://sheetjs.com)                           |
 
 ### Formularios y Validacion
 
-| Libreria | Version | Funcion | Enlace |
-|---|---|---|---|
-| React Hook Form | 7.82.0 | Formularios React performantes | [react-hook-form.com](https://react-hook-form.com) |
-| Zod | 3.24.2 | Validacion de esquemas TypeScript-first | [zod.dev](https://zod.dev) |
-| @hookform/resolvers | 5.2.2 | Integracion Zod + React Hook Form | [github.com/react-hook-form/resolvers](https://github.com/react-hook-form/resolvers) |
+| Libreria            | Version | Funcion                                 | Enlace                                                                               |
+| ------------------- | ------- | --------------------------------------- | ------------------------------------------------------------------------------------ |
+| React Hook Form     | 7.82.0  | Formularios React performantes          | [react-hook-form.com](https://react-hook-form.com)                                   |
+| Zod                 | 3.24.2  | Validacion de esquemas TypeScript-first | [zod.dev](https://zod.dev)                                                           |
+| @hookform/resolvers | 5.2.2   | Integracion Zod + React Hook Form       | [github.com/react-hook-form/resolvers](https://github.com/react-hook-form/resolvers) |
 
 ### Herramientas Generales
 
-| Libreria | Version | Funcion | Enlace |
-|---|---|---|---|
-| date-fns | 4.1.0 | Utilidades de fechas | [date-fns.org](https://date-fns.org) |
-| sonner | 2.0.7 | Notificaciones toast | [github.com/emilkowalski/sonner](https://github.com/emilkowalski/sonner) |
-| vaul | 1.1.2 | Drawer UI | [github.com/emilkowalski/vaul](https://github.com/emilkowalski/vaul) |
-| cmdk | 1.1.1 | Command palette | [cmdk.paco.me](https://cmdk.paco.me) |
-| embla-carousel-react | 8.6.0 | Carousel UI | [embla-carousel.com](https://www.embla-carousel.com) |
-| react-resizable-panels | 4.6.5 | Paneles redimensionables | [github.com/bvaughn/react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) |
-| input-otp | 1.4.2 | Input OTP | [github.com/unstable-factory/input-otp](https://github.com/unstable-factory/input-otp) |
+| Libreria               | Version | Funcion                  | Enlace                                                                                         |
+| ---------------------- | ------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| date-fns               | 4.1.0   | Utilidades de fechas     | [date-fns.org](https://date-fns.org)                                                           |
+| sonner                 | 2.0.7   | Notificaciones toast     | [github.com/emilkowalski/sonner](https://github.com/emilkowalski/sonner)                       |
+| vaul                   | 1.1.2   | Drawer UI                | [github.com/emilkowalski/vaul](https://github.com/emilkowalski/vaul)                           |
+| cmdk                   | 1.1.1   | Command palette          | [cmdk.paco.me](https://cmdk.paco.me)                                                           |
+| embla-carousel-react   | 8.6.0   | Carousel UI              | [embla-carousel.com](https://www.embla-carousel.com)                                           |
+| react-resizable-panels | 4.6.5   | Paneles redimensionables | [github.com/bvaughn/react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) |
+| input-otp              | 1.4.2   | Input OTP                | [github.com/unstable-factory/input-otp](https://github.com/unstable-factory/input-otp)         |
 
 ---
 
@@ -234,47 +193,47 @@ Chatbot:       Groq (Llama 3.1 8B) via Supabase Edge Function + RAG
 
 ### Compilacion y Build
 
-| Herramienta | Version | Funcion | Enlace |
-|---|---|---|---|
-| Vite | 8.0.16 | Build tool y dev server | [vite.dev](https://vite.dev) |
-| TypeScript | 5.8.3 | Lenguaje tipado | [typescriptlang.org](https://www.typescriptlang.org) |
-| Nitro | 3.0.260603-beta | Motor de servidor (UnJS) | [nitro.unjs.io](https://nitro.unjs.io) |
-| @lovable.dev/vite-tanstack-config | 2.7.1 | Configuracion Vite para Lovable/TanStack | [lovable.dev](https://lovable.dev) |
+| Herramienta                       | Version         | Funcion                                  | Enlace                                               |
+| --------------------------------- | --------------- | ---------------------------------------- | ---------------------------------------------------- |
+| Vite                              | 8.0.16          | Build tool y dev server                  | [vite.dev](https://vite.dev)                         |
+| TypeScript                        | 5.8.3           | Lenguaje tipado                          | [typescriptlang.org](https://www.typescriptlang.org) |
+| Nitro                             | 3.0.260603-beta | Motor de servidor (UnJS)                 | [nitro.unjs.io](https://nitro.unjs.io)               |
+| @lovable.dev/vite-tanstack-config | 2.7.1           | Configuracion Vite para Lovable/TanStack | [lovable.dev](https://lovable.dev)                   |
 
 ### Linting y Formateo
 
-| Herramienta | Version | Funcion | Enlace |
-|---|---|---|---|
-| ESLint | 9.32.0 | Linter de JavaScript/TypeScript | [eslint.org](https://eslint.org) |
-| Prettier | 3.7.3 | Formateador de codigo | [prettier.io](https://prettier.io) |
-| eslint-config-prettier | 10.1.1 | Desactiva reglas ESLint que conflictean con Prettier | [github.com/prettier/eslint-config-prettier](https://github.com/prettier/eslint-config-prettier) |
-| eslint-plugin-prettier | 5.2.6 | Ejecuta Prettier como regla ESLint | [github.com/prettier/eslint-plugin-prettier](https://github.com/prettier/eslint-plugin-prettier) |
+| Herramienta            | Version | Funcion                                              | Enlace                                                                                           |
+| ---------------------- | ------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| ESLint                 | 9.32.0  | Linter de JavaScript/TypeScript                      | [eslint.org](https://eslint.org)                                                                 |
+| Prettier               | 3.7.3   | Formateador de codigo                                | [prettier.io](https://prettier.io)                                                               |
+| eslint-config-prettier | 10.1.1  | Desactiva reglas ESLint que conflictean con Prettier | [github.com/prettier/eslint-config-prettier](https://github.com/prettier/eslint-config-prettier) |
+| eslint-plugin-prettier | 5.2.6   | Ejecuta Prettier como regla ESLint                   | [github.com/prettier/eslint-plugin-prettier](https://github.com/prettier/eslint-plugin-prettier) |
 
 ### Testing
 
-| Herramienta | Version | Funcion | Enlace |
-|---|---|---|---|
-| Vitest | 4.1.10 | Framework de testing unitario | [vitest.dev](https://vitest.dev) |
-| @vitest/coverage-v8 | 4.1.10 | Coverage de codigo via V8 | [vitest.dev](https://vitest.dev) |
-| Playwright | 1.61.1 | Testing E2E en navegadores reales | [playwright.dev](https://playwright.dev) |
-| @testing-library/react | 16.3.2 | Testing de componentes React | [testing-library.com](https://testing-library.com) |
-| @testing-library/jest-dom | 7.0.0 | Matchers DOM para tests | [testing-library.com](https://testing-library.com) |
-| jsdom | 29.1.1 | Implementacion DOM para tests | [github.com/jsdom/jsdom](https://github.com/jsdom/jsdom) |
+| Herramienta               | Version | Funcion                           | Enlace                                                   |
+| ------------------------- | ------- | --------------------------------- | -------------------------------------------------------- |
+| Vitest                    | 4.1.10  | Framework de testing unitario     | [vitest.dev](https://vitest.dev)                         |
+| @vitest/coverage-v8       | 4.1.10  | Coverage de codigo via V8         | [vitest.dev](https://vitest.dev)                         |
+| Playwright                | 1.61.1  | Testing E2E en navegadores reales | [playwright.dev](https://playwright.dev)                 |
+| @testing-library/react    | 16.3.2  | Testing de componentes React      | [testing-library.com](https://testing-library.com)       |
+| @testing-library/jest-dom | 7.0.0   | Matchers DOM para tests           | [testing-library.com](https://testing-library.com)       |
+| jsdom                     | 29.1.1  | Implementacion DOM para tests     | [github.com/jsdom/jsdom](https://github.com/jsdom/jsdom) |
 
 ### Git Hooks y CI Local
 
-| Herramienta | Version | Funcion | Enlace |
-|---|---|---|---|
-| Husky | 9.1.7 | Git hooks | [typicode.github.io/husky](https://typicode.github.io/husky) |
-| lint-staged | 17.1.1 | Ejecutar linting en archivos staged | [github.com/lint-staged/lint-staged](https://github.com/lint-staged/lint-staged) |
+| Herramienta | Version | Funcion                             | Enlace                                                                           |
+| ----------- | ------- | ----------------------------------- | -------------------------------------------------------------------------------- |
+| Husky       | 9.1.7   | Git hooks                           | [typicode.github.io/husky](https://typicode.github.io/husky)                     |
+| lint-staged | 17.1.1  | Ejecutar linting en archivos staged | [github.com/lint-staged/lint-staged](https://github.com/lint-staged/lint-staged) |
 
 ### Paquetes y Runtime
 
-| Herramienta | Funcion | Enlace |
-|---|---|---|
-| Bun | Runtime de JavaScript (usado en CI/CD) | [bun.sh](https://bun.sh) |
-| Node.js 22.12+ | Runtime de JavaScript (produccion) | [nodejs.org](https://nodejs.org) |
-| npm | Gestor de paquetes | [npmjs.com](https://www.npmjs.com) |
+| Herramienta    | Funcion                                | Enlace                             |
+| -------------- | -------------------------------------- | ---------------------------------- |
+| Bun            | Runtime de JavaScript (usado en CI/CD) | [bun.sh](https://bun.sh)           |
+| Node.js 22.12+ | Runtime de JavaScript (produccion)     | [nodejs.org](https://nodejs.org)   |
+| npm            | Gestor de paquetes                     | [npmjs.com](https://www.npmjs.com) |
 
 ---
 
@@ -412,9 +371,8 @@ Chatbot:       Groq (Llama 3.1 8B) via Supabase Edge Function + RAG
 
 ## Notas Finales
 
-- **Todas las APIs climaticas y de suelo son gratuitas**; IDEAM requiere un app token de datos.gov.co
-- **El chatbot usa Groq (Llama 3.1 8B) via Supabase Edge Function**, con RAG sobre la base de conocimiento local y memoria de conversacion
-- **Supabase tiene un plan gratuito** con 500MB de base de datos, 1GB de almacenamiento y 500,000 invocaciones de Edge Functions
-- **Sentry tiene un plan gratuito** con 5,000 errores/mes
-- **Render tiene un plan gratuito** con limitaciones de rendimiento
-- **El IDEAM token es opcional** — la app funciona sin el, pero con menos datos historicos
+- **Todas las APIs climáticas y de suelo son gratuitas**; IDEAM cuenta con app token de datos.gov.co opcional.
+- **El chatbot usa Groq (`openai/gpt-oss-20b`) y Google Gemini 2.0 Flash vía Supabase Edge Functions**, con motor determinista, RAG semántico y evaluación cualitativa.
+- **Supabase PostgreSQL opera bajo RLS Hardening (Migración 009)** con permisos de escritura restringidos a `service_role`.
+- **Sentry monitorea errores en producción** con filtro de errores de red.
+- **La aplicación opera bajo arquitectura estrictamente conectada** garantizando la integridad de los datos presentados.

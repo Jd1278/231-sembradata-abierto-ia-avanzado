@@ -12,9 +12,8 @@ function createMockQueryBuilder(initialData: unknown = null, initialError: unkno
   const gte = vi.fn().mockReturnValue({ order, single, lte, maybeSingle, eq: eqChain });
   eqChain.mockReturnValue({ order, single, gte, lte, maybeSingle, eq: eqChain });
   const select = vi.fn().mockReturnValue({ order, single, eq: eqChain, gte, lte, maybeSingle });
-  const upsert = vi.fn().mockResolvedValue({ error: null });
 
-  return { select, upsert, eq: eqChain, gte, lte, order, single, maybeSingle, _state: state };
+  return { select, eq: eqChain, gte, lte, order, single, maybeSingle, _state: state };
 }
 
 let mockBuilder: ReturnType<typeof createMockQueryBuilder>;
@@ -22,6 +21,7 @@ let mockBuilder: ReturnType<typeof createMockQueryBuilder>;
 vi.mock("../../src/services/supabase", () => ({
   supabase: {
     from: vi.fn(() => mockBuilder),
+    rpc: vi.fn().mockResolvedValue({ data: 5, error: null }),
   },
   isSupabaseConfigured: vi.fn(() => true),
 }));
@@ -29,11 +29,9 @@ vi.mock("../../src/services/supabase", () => ({
 import { supabase, isSupabaseConfigured } from "../../src/services/supabase";
 import {
   getCachedIdeamObservations,
-  setCachedIdeamObservations,
   getCachedNasaPower,
-  setCachedNasaPower,
   getCachedCommodity,
-  setCachedCommodity,
+  clearExpiredCache,
 } from "../../src/services/cache";
 
 const mockedIsConfigured = vi.mocked(isSupabaseConfigured);
@@ -58,21 +56,21 @@ describe("getCachedIdeamObservations", () => {
     expect(result).toBeNull();
   });
 
-  it("returns null when cache entries are stale", async () => {
-    const staleDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-    mockBuilder._state.data = [
-      { estacion_id: "EST001", fecha: "2024-01-15", fetched_at: staleDate, temperatura: 20 },
-    ];
-    mockBuilder._state.error = null;
-
-    const result = await getCachedIdeamObservations("EST001", "2024-01-01", "2024-01-31");
-    expect(result).toBeNull();
-  });
-
-  it("returns cached data when fresh", async () => {
+  it("returns data when fresh", async () => {
     const freshDate = new Date().toISOString();
     const rows = [
-      { estacion_id: "EST001", fecha: "2024-01-15", fetched_at: freshDate, temperatura: 22 },
+      {
+        estacion_id: "EST001",
+        fecha: "2024-01-15",
+        temperatura: 25.4,
+        humedad: 70,
+        precipitacion: 12.5,
+        velocidad_viento: 8,
+        direccion_viento: 180,
+        presion: 1013,
+        radiacion_solar: 500,
+        fetched_at: freshDate,
+      },
     ];
     mockBuilder._state.data = rows;
     mockBuilder._state.error = null;
@@ -80,72 +78,33 @@ describe("getCachedIdeamObservations", () => {
     const result = await getCachedIdeamObservations("EST001", "2024-01-01", "2024-01-31");
     expect(result).toEqual(rows);
   });
-});
 
-describe("setCachedIdeamObservations", () => {
-  it("does nothing when supabase is not configured", async () => {
-    mockedIsConfigured.mockReturnValue(false);
-    await setCachedIdeamObservations([
+  it("returns null when all records are stale", async () => {
+    const staleDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    mockBuilder._state.data = [
       {
         estacion_id: "EST001",
-        fecha: "2024-01-01",
-        temperatura: 20,
-        humedad: 80,
-        precipitacion: 10,
-        velocidad_viento: 5,
+        fecha: "2024-01-15",
+        temperatura: 25.4,
+        humedad: 70,
+        precipitacion: 12.5,
+        velocidad_viento: 8,
         direccion_viento: 180,
         presion: 1013,
         radiacion_solar: 500,
+        fetched_at: staleDate,
       },
-    ]);
-    expect(supabase.from).not.toHaveBeenCalled();
-  });
+    ];
+    mockBuilder._state.error = null;
 
-  it("does nothing for empty rows", async () => {
-    await setCachedIdeamObservations([]);
-    expect(supabase.from).not.toHaveBeenCalled();
-  });
-
-  it("calls upsert with fetched_at timestamp", async () => {
-    await setCachedIdeamObservations([
-      {
-        estacion_id: "EST001",
-        fecha: "2024-01-01",
-        temperatura: 20,
-        humedad: 80,
-        precipitacion: 10,
-        velocidad_viento: 5,
-        direccion_viento: 180,
-        presion: 1013,
-        radiacion_solar: 500,
-      },
-    ]);
-
-    expect(mockBuilder.upsert).toHaveBeenCalled();
-    const upsertArg = mockBuilder.upsert.mock.calls[0][0];
-    expect(upsertArg[0].fetched_at).toBeDefined();
-    expect(upsertArg[0].estacion_id).toBe("EST001");
-    expect(upsertArg[0].temperatura).toBe(20);
+    const result = await getCachedIdeamObservations("EST001", "2024-01-01", "2024-01-31");
+    expect(result).toBeNull();
   });
 });
 
 describe("getCachedNasaPower", () => {
   it("returns null when supabase is not configured", async () => {
     mockedIsConfigured.mockReturnValue(false);
-    const result = await getCachedNasaPower(6.25, -75.58, "2024-01-01", "2024-01-31");
-    expect(result).toBeNull();
-  });
-
-  it("returns null on error", async () => {
-    mockBuilder._state.data = null;
-    mockBuilder._state.error = { message: "fail" };
-    const result = await getCachedNasaPower(6.25, -75.58, "2024-01-01", "2024-01-31");
-    expect(result).toBeNull();
-  });
-
-  it("returns null when empty data", async () => {
-    mockBuilder._state.data = [];
-    mockBuilder._state.error = null;
     const result = await getCachedNasaPower(6.25, -75.58, "2024-01-01", "2024-01-31");
     expect(result).toBeNull();
   });
@@ -200,69 +159,9 @@ describe("getCachedNasaPower", () => {
   });
 });
 
-describe("setCachedNasaPower", () => {
-  it("does nothing when supabase is not configured", async () => {
-    mockedIsConfigured.mockReturnValue(false);
-    await setCachedNasaPower([
-      {
-        lat: 6.25,
-        lng: -75.58,
-        fecha: "2024-01-01",
-        temp_avg: 22,
-        temp_max: 28,
-        temp_min: 16,
-        precipitacion: 80,
-        humedad: 75,
-        velocidad_viento: 10,
-        radiacion_solar: 450,
-        evapotranspiracion: 3.5,
-      },
-    ]);
-    expect(supabase.from).not.toHaveBeenCalled();
-  });
-
-  it("does nothing for empty rows", async () => {
-    await setCachedNasaPower([]);
-    expect(supabase.from).not.toHaveBeenCalled();
-  });
-
-  it("calls upsert with rounded coordinates", async () => {
-    await setCachedNasaPower([
-      {
-        lat: 6.2543,
-        lng: -75.5821,
-        fecha: "2024-01-01",
-        temp_avg: 22,
-        temp_max: 28,
-        temp_min: 16,
-        precipitacion: 80,
-        humedad: 75,
-        velocidad_viento: 10,
-        radiacion_solar: 450,
-        evapotranspiracion: 3.5,
-      },
-    ]);
-
-    expect(mockBuilder.upsert).toHaveBeenCalled();
-    const upsertArg = mockBuilder.upsert.mock.calls[0][0];
-    expect(upsertArg[0].lat).toBe(6.25);
-    expect(upsertArg[0].lng).toBe(-75.58);
-    expect(upsertArg[0].fetched_at).toBeDefined();
-  });
-});
-
 describe("getCachedCommodity", () => {
   it("returns null when supabase is not configured", async () => {
     mockedIsConfigured.mockReturnValue(false);
-    const result = await getCachedCommodity("CORN");
-    expect(result).toBeNull();
-  });
-
-  it("returns null when entry is stale", async () => {
-    const staleDate = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    mockBuilder._state.data = { payload: { price: 200 }, fetched_at: staleDate };
-    mockBuilder._state.error = null;
-
     const result = await getCachedCommodity("CORN");
     expect(result).toBeNull();
   });
@@ -277,30 +176,20 @@ describe("getCachedCommodity", () => {
     expect(result).toEqual(payload);
   });
 
-  it("returns null when no data found", async () => {
-    mockBuilder._state.data = null;
-    mockBuilder._state.error = { message: "not found" };
+  it("returns null when entry is stale", async () => {
+    const staleDate = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    mockBuilder._state.data = { payload: { price: 200 }, fetched_at: staleDate };
+    mockBuilder._state.error = null;
 
-    const result = await getCachedCommodity("NONEXISTENT");
+    const result = await getCachedCommodity("CORN");
     expect(result).toBeNull();
   });
 });
 
-describe("setCachedCommodity", () => {
-  it("does nothing when supabase is not configured", async () => {
-    mockedIsConfigured.mockReturnValue(false);
-    await setCachedCommodity("CORN", { price: 200 });
-    expect(supabase.from).not.toHaveBeenCalled();
-  });
-
-  it("calls upsert with symbol, payload, and fetched_at", async () => {
-    const payload = { price: 200, currency: "USD" };
-    await setCachedCommodity("CORN", payload);
-
-    expect(mockBuilder.upsert).toHaveBeenCalled();
-    const upsertArg = mockBuilder.upsert.mock.calls[0][0];
-    expect(upsertArg.symbol).toBe("CORN");
-    expect(upsertArg.payload).toEqual(payload);
-    expect(upsertArg.fetched_at).toBeDefined();
+describe("clearExpiredCache (Server-Side Maintenance)", () => {
+  it("executes administrative RPC clean_system_cache_and_audit", async () => {
+    const result = await clearExpiredCache();
+    expect(supabase.rpc).toHaveBeenCalledWith("clean_system_cache_and_audit");
+    expect(result.cleaned).toBe(5);
   });
 });

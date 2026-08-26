@@ -56,11 +56,12 @@ describe("AdvancedFilters", () => {
     expect(getByText("Franco")).toBeInTheDocument();
   });
 
-  it("cambia el tipo de suelo al hacer clic", async () => {
+  it("cambia el tipo de suelo al aplicar filtros", async () => {
     const onChange = vi.fn();
     const { getByText, user } = setup(<FilterContainer onChange={onChange} />);
     await user.click(getByText("Filtros avanzados"));
     await user.click(getByText("Arcilla"));
+    await user.click(getByText("Aplicar Filtros"));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ soilType: "arcilla" }));
   });
 

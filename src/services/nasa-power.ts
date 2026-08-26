@@ -1,4 +1,4 @@
-import { getCachedNasaPower, setCachedNasaPower, type NasaPowerCacheRow } from "./cache";
+import { getCachedNasaPower } from "./cache";
 import { rateLimitedFetch } from "./rate-limiter";
 
 export interface NasaPowerDaily {
@@ -14,7 +14,7 @@ export interface NasaPowerDaily {
   evapotranspiration: number;
   wetBulbTemp: number;
   earthSkinTemp: number;
-  albedo: number;
+  clearnessIndex: number;
   cloudOpacity: number;
   referenceEvapotranspiration: number;
 }
@@ -74,14 +74,13 @@ const AG_PARAMS = [
   "TS",
   "ALLSKY_KT",
   "ALLSKY_SFC_LW_DWN",
-  "GDD0",
-  "GDD10",
-  "CDD0",
-  "HDD0",
-  "CDD10",
-  "PET",
-  "SNOWP",
 ].join(",");
+
+function safeValue(val: unknown, fallback = 0): number {
+  if (val === -999 || val === "-999" || val === null || val === undefined) return fallback;
+  const n = Number(val);
+  return Number.isFinite(n) ? n : fallback;
+}
 
 function formatParam(d: Date): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
@@ -103,15 +102,15 @@ function buildSummary(
 
   const monthly = [...monthMap.entries()].map(([month, days]) => ({
     month,
-    tempAvg: days.reduce((s, d) => s + d.tempAvg, 0) / days.length,
+    tempAvg: days.reduce((s, d) => s + d.tempAvg, 0) / Math.max(1, days.length),
     tempMax: Math.max(...days.map((d) => d.tempMax)),
     tempMin: Math.min(...days.map((d) => d.tempMin)),
     precipitation: days.reduce((s, d) => s + d.precipitation, 0),
-    humidity: days.reduce((s, d) => s + d.humidity, 0) / days.length,
-    solarRadiation: days.reduce((s, d) => s + d.solarRadiation, 0) / days.length,
-    windSpeed: days.reduce((s, d) => s + d.windSpeed, 0) / days.length,
+    humidity: days.reduce((s, d) => s + d.humidity, 0) / Math.max(1, days.length),
+    solarRadiation: days.reduce((s, d) => s + d.solarRadiation, 0) / Math.max(1, days.length),
+    windSpeed: days.reduce((s, d) => s + d.windSpeed, 0) / Math.max(1, days.length),
     referenceEvapotranspiration:
-      days.reduce((s, d) => s + d.referenceEvapotranspiration, 0) / days.length,
+      days.reduce((s, d) => s + d.referenceEvapotranspiration, 0) / Math.max(1, days.length),
   }));
 
   const totalDays = daily.length;
@@ -175,9 +174,9 @@ export async function fetchNasaPowerData(
       evapotranspiration: r.evapotranspiracion,
       wetBulbTemp: 0,
       earthSkinTemp: 0,
-      albedo: 0,
+      clearnessIndex: 0,
       cloudOpacity: 0,
-      referenceEvapotranspiration: 0,
+      referenceEvapotranspiration: r.evapotranspiracion,
     }));
     return buildSummary(lat, lng, startDate, endDate, daily);
   }
@@ -198,6 +197,7 @@ export async function fetchNasaPowerData(
     `${lat.toFixed(2)},${lng.toFixed(2)}`,
   );
   if (!res.ok) throw new Error(`NASA POWER API error: ${res.status}`);
+
   const raw = await res.json();
 
   const props = raw?.properties?.parameter;
@@ -209,47 +209,37 @@ export async function fetchNasaPowerData(
       )
     : [];
 
-  const daily: NasaPowerDaily[] = dates.map((d) => ({
-    date: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`,
-    tempAvg: props.T2M?.[d] ?? 0,
-    tempMax: props.T2M_MAX?.[d] ?? 0,
-    tempMin: props.T2M_MIN?.[d] ?? 0,
-    precipitation: props.PRECTOTCORR?.[d] ?? 0,
-    humidity: props.RH2M?.[d] ?? 0,
-    windSpeed: props.WS2M?.[d] ?? 0,
-    solarRadiation: props.ALLSKY_SFC_SW_DWN?.[d] ?? 0,
-    windDirection: props.WD2M?.[d] ?? 0,
-    evapotranspiration: props.EVPTRNS?.[d] ?? 0,
-    wetBulbTemp: props.T2MDEW?.[d] ?? 0,
-    earthSkinTemp: props.TS?.[d] ?? 0,
-    albedo: props.ALLSKY_KT?.[d] ?? 0,
-    cloudOpacity: props.ALLSKY_SFC_LW_DWN?.[d] ?? 0,
-    referenceEvapotranspiration:
-      (props.T2M_MAX?.[d] ?? 0) > 0
-        ? Math.max(
-            0,
-            (((props.T2M_MAX?.[d] ?? 0) + (props.T2M_MIN?.[d] ?? 0)) / 2) *
-              0.0023 *
-              (props.T2M_MAX?.[d] ?? 0) -
-              (props.T2M_MIN?.[d] ?? 0) * 0.402,
-          )
-        : 0,
-  }));
+  const daily: NasaPowerDaily[] = dates
+    .filter((d) => {
+      const v = props.T2M?.[d];
+      return v !== -999 && v !== "-999" && v !== null && v !== undefined;
+    })
+    .map((d) => {
+      const tAvg = safeValue(props.T2M?.[d], 0);
+      const tMax = safeValue(props.T2M_MAX?.[d], tAvg);
+      const tMin = safeValue(props.T2M_MIN?.[d], tAvg);
+      const precip = Math.max(0, safeValue(props.PRECTOTCORR?.[d], 0));
+      const hum = Math.max(0, Math.min(100, safeValue(props.RH2M?.[d], 0)));
+      const evp = safeValue(props.EVPTRNS?.[d], 0);
 
-  const cacheRows: NasaPowerCacheRow[] = daily.map((d) => ({
-    lat,
-    lng,
-    fecha: d.date,
-    temp_avg: d.tempAvg,
-    temp_max: d.tempMax,
-    temp_min: d.tempMin,
-    precipitacion: d.precipitation,
-    humedad: d.humidity,
-    velocidad_viento: d.windSpeed,
-    radiacion_solar: d.solarRadiation,
-    evapotranspiracion: d.evapotranspiration,
-  }));
-  setCachedNasaPower(cacheRows);
+      return {
+        date: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`,
+        tempAvg: tAvg,
+        tempMax: tMax,
+        tempMin: tMin,
+        precipitation: precip,
+        humidity: hum,
+        windSpeed: safeValue(props.WS2M?.[d], 0),
+        solarRadiation: safeValue(props.ALLSKY_SFC_SW_DWN?.[d], 0),
+        windDirection: safeValue(props.WD2M?.[d], 0),
+        evapotranspiration: evp,
+        wetBulbTemp: safeValue(props.T2MDEW?.[d], 0),
+        earthSkinTemp: safeValue(props.TS?.[d], 0),
+        clearnessIndex: safeValue(props.ALLSKY_KT?.[d], 0),
+        cloudOpacity: safeValue(props.ALLSKY_SFC_LW_DWN?.[d], 0),
+        referenceEvapotranspiration: evp,
+      };
+    });
 
   return buildSummary(lat, lng, startDate, endDate, daily);
 }
