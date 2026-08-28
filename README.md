@@ -32,15 +32,13 @@
 
 ### [Sustentación y Documentación Ejecutiva](https://gamma.app/docs/Prediccion-Agroclimatica-Inteligente-vr0vp5qbfomjv4y)
 
-</div>
 <!-- VIDEO DE PRESENTACIÓN SEMBRADATA -->
 <div align="center">
-  <a href="https://www.youtube.com/watch?v=TJ82Gnfbt7U" target="_blank">
-    <img src="https://img.youtube.com/vi/TJ82Gnfbt7U/maxresdefault.jpg" alt="Presentación SembraData" width="100%" style="border-radius: 8px;">
+  <a href="https://www.youtube.com/watch?v=VB6kDncHPFs" target="_blank">
+    <img src="https://img.youtube.com/vi/VB6kDncHPFs/maxresdefault.jpg?v=2" alt="Presentación SembraData" width="100%" style="border-radius: 8px;">
   </a>
-  <p><i>▶️ Haz clic en la imagen para ver la presentación del proyecto en YouTube (2:21 min)</i></p>
+  <p><i>▶️ Haz clic en la imagen para ver la presentación del proyecto en YouTube (2:23 min)</i></p>
 </div>
----
 
 ## Características Principales
 
