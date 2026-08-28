@@ -34,12 +34,11 @@
 
 <!-- VIDEO DE PRESENTACIÓN SEMBRADATA -->
 <div align="center">
-  <a href="https://www.youtube.com/watch?v=VB6kDncHPFs" target="_blank">
-    <img src="https://img.youtube.com/vi/VB6kDncHPFs/maxresdefault.jpg?v=2" alt="Presentación SembraData" width="100%" style="border-radius: 8px;">
+  <a href="https://www.youtube.com/watch?v=2j3pJan0OJU" target="_blank">
+    <img src="https://img.youtube.com/vi/2j3pJan0OJU/maxresdefault.jpg?v=3" alt="Presentación SembraData" width="100%" style="border-radius: 8px;">
   </a>
-  <p><i>▶️ Haz clic en la imagen para ver la presentación del proyecto en YouTube (2:23 min)</i></p>
+  <p><i>▶️ Haz clic en la imagen para ver la presentación del proyecto en YouTube (2:27 min)</i></p>
 </div>
-
 ## Características Principales
 
 | Icono | Módulo / Característica                     | Descripción Técnica                                                                                                                                                                                                                                                                          |
