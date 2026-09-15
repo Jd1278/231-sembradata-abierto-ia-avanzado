@@ -275,9 +275,13 @@ export class CommodityService {
     };
   }
 
-  async getCommodityPrice(crop: CropKey): Promise<CommodityPrice> {
+  async getCommodityPrice(
+    crop: CropKey,
+    options?: { allowStale?: boolean },
+  ): Promise<CommodityPrice> {
     if (crop === "granadilla") return GRANADILLA_UNAVAILABLE;
     const symbol = crop === "cacao" ? "COCOA" : "COFFEE";
+    const allowStale = options?.allowStale ?? true;
 
     try {
       const forecast = await this.provider.fetchPrice(symbol);
@@ -297,9 +301,11 @@ export class CommodityService {
       return this.mapToCommodityPrice(crop, forecast, false);
     } catch (err) {
       console.warn(`[Commodity] Failed to fetch ${symbol}, checking cache fallback:`, err);
-      const cached = await getCachedCommodity<RawCommodityForecast>(symbol);
-      if (cached && Number.isFinite(cached.currentPrice?.value)) {
-        return this.mapToCommodityPrice(crop, cached, true);
+      if (allowStale) {
+        const cached = await getCachedCommodity<RawCommodityForecast>(symbol, { allowStale: true });
+        if (cached && Number.isFinite(cached.currentPrice?.value)) {
+          return this.mapToCommodityPrice(crop, cached, true);
+        }
       }
       return buildUnavailableCommodity(
         crop,
@@ -308,18 +314,17 @@ export class CommodityService {
     }
   }
 
-  async getAllCommodityPrices(): Promise<CommodityPrice[]> {
-    const [cafeRes, cacaoRes] = await Promise.allSettled([
-      this.getCommodityPrice("cafe"),
-      this.getCommodityPrice("cacao"),
-    ]);
-
-    const cafePrice =
-      cafeRes.status === "fulfilled" ? cafeRes.value : buildUnavailableCommodity("cafe");
-    const cacaoPrice =
-      cacaoRes.status === "fulfilled" ? cacaoRes.value : buildUnavailableCommodity("cacao");
-
-    return [cafePrice, cacaoPrice, GRANADILLA_UNAVAILABLE];
+  async getAllCommodityPrices(options?: { allowStale?: boolean }): Promise<CommodityPrice[]> {
+    const crops: CropKey[] = ["cafe", "cacao", "granadilla"];
+    const results = await Promise.allSettled(crops.map((c) => this.getCommodityPrice(c, options)));
+    return results.map((r, i) =>
+      r.status === "fulfilled"
+        ? r.value
+        : buildUnavailableCommodity(
+            crops[i],
+            r.reason instanceof Error ? r.reason.message : "Error al consultar cotización",
+          ),
+    );
   }
 }
 

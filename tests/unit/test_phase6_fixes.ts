@@ -101,7 +101,7 @@ describe("Phase 6 Fixes Validation Suite", () => {
       };
 
       const service = new CommodityService(mockProvider);
-      const price = await service.getCommodityPrice("cafe");
+      const price = await service.getCommodityPrice("cafe", { allowStale: false });
 
       expect(price.crop).toBe("cafe");
       expect(price.status).toBe("unavailable");
@@ -115,7 +115,7 @@ describe("Phase 6 Fixes Validation Suite", () => {
       };
 
       const service = new CommodityService(mockProvider);
-      const prices = await service.getAllCommodityPrices();
+      const prices = await service.getAllCommodityPrices({ allowStale: false });
 
       expect(prices.length).toBe(3);
       expect(prices.map((p) => p.crop)).toEqual(["cafe", "cacao", "granadilla"]);
