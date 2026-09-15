@@ -89,7 +89,13 @@ export class HttpCommodityPriceProvider implements CommodityPriceProvider {
     const cached = await getCachedCommodity<RawCommodityForecast>(symbol);
     if (cached) return cached;
 
-    const res = await rateLimitedFetch("commodity", `${BASE_URL}/${symbol}`, symbol);
+    const res = await rateLimitedFetch(
+      "commodity",
+      `${BASE_URL}/${symbol}`,
+      symbol,
+      undefined,
+      3500,
+    );
     if (!res.ok) {
       throw new Error(`Commodity API error: ${res.status} ${res.statusText}`);
     }
@@ -188,7 +194,9 @@ export function normalizePerKg(value: number | null, unit: string): number | nul
     normalized === "¢/lb" ||
     normalized.includes("¢/lb") ||
     normalized.includes("cents/lb") ||
-    normalized.includes("¢/pound")
+    normalized.includes("¢/pound") ||
+    // Heuristic: If raw unit is 'lb' or '$/lb' but numeric value > 50 (e.g. 359.162), it represents cents/lb
+    ((normalized === "lb" || normalized === "usd/lb" || normalized === "$/lb") && value > 50)
   ) {
     return +(value / 100 / KG_PER_LB).toFixed(4);
   }
@@ -221,7 +229,10 @@ export class CommodityService {
     }
 
     const isCocoa = crop === "cacao";
-    const quoteUnit = forecast.currentPrice?.unit || (isCocoa ? "USD/MT" : "¢/lb");
+    let quoteUnit = forecast.currentPrice?.unit || (isCocoa ? "USD/MT" : "¢/lb");
+    if (!isCocoa && (quoteUnit === "lb" || quoteUnit === "$/lb") && (rawVal as number) > 50) {
+      quoteUnit = "¢/lb";
+    }
 
     return {
       crop,

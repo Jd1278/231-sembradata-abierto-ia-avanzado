@@ -100,14 +100,14 @@ describe("Comprehensive Historical Yield & Commodity Pipeline Audit", () => {
         expect(coffee.price).toBeGreaterThan(0);
         expect(coffee.normalizedPricePerKg).toBeGreaterThan(0);
       }
-    });
+    }, 15000);
 
     it("retrieves Cocoa market data without crashing when live price is missing", async () => {
       const cocoa = await service.getCommodityPrice("cacao");
       expect(cocoa.crop).toBe("cacao");
       expect(["live", "cached", "unavailable"]).toContain(cocoa.status);
       expect(cocoa.disclaimer).toBeTruthy();
-    });
+    }, 15000);
 
     it("strictly preserves national market disclaimer for Granadilla", async () => {
       const granadilla = await service.getCommodityPrice("granadilla");

@@ -119,6 +119,10 @@ describe("Phase 3: International Commodity Prices & Market Disclaimers", () => {
       expect(normalizePerKg(100, "¢/lb")).toBeCloseTo(2.2046, 3);
       // 250 ¢/lb = 2.50 USD / 0.45359237 kg = 5.5116 USD/kg
       expect(normalizePerKg(250, "cents/lb")).toBeCloseTo(5.5116, 3);
+      // 359.162 lb (quoted in cents) = 3.59162 USD / 0.45359237 kg = 7.9182 USD/kg
+      expect(normalizePerKg(359.162, "lb")).toBeCloseTo(7.9182, 3);
+      // 3.50 USD/lb = 3.50 USD / 0.45359237 kg = 7.7162 USD/kg
+      expect(normalizePerKg(3.5, "USD/lb")).toBeCloseTo(7.7162, 3);
     });
 
     it("handles null, NaN and invalid units safely", () => {

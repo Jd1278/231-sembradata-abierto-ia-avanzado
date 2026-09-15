@@ -63,7 +63,11 @@ function inlineBold(text: string): React.ReactNode {
 export interface ChatClaim {
   text: string;
   claimType:
-    "observed" | "forecast" | "model_estimate" | "agronomic_requirement" | "general_guidance";
+    | "observed"
+    | "forecast"
+    | "model_estimate"
+    | "agronomic_requirement"
+    | "general_guidance";
   source: string;
   observedAt?: string | null;
   value?: number | null;
