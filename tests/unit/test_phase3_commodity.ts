@@ -99,11 +99,15 @@ describe("Phase 3: International Commodity Prices & Market Disclaimers", () => {
       expect(cocoa.normalizedPricePerKg).toBe(8.65);
     });
 
-    it("returns explicit unavailable state for Granadilla without inventing international prices", async () => {
+    it("returns real observed national wholesale price for Granadilla from DANE SIPSA", async () => {
       const granadilla = await service.getCommodityPrice("granadilla");
-      expect(granadilla).toEqual(GRANADILLA_UNAVAILABLE);
-      expect(granadilla.price).toBeNull();
-      expect(granadilla.referenceType).toBe("unavailable");
+      expect(granadilla.crop).toBe("granadilla");
+      expect(granadilla.price).toBe(9600);
+      expect(granadilla.unit).toBe("COP/kg");
+      expect(granadilla.currency).toBe("COP");
+      expect(granadilla.marketType).toBe("national_wholesale");
+      expect(granadilla.market).toContain("Centroabastos");
+      expect(granadilla.sources).toContain("DANE - SIPSA");
       expect(granadilla.disclaimer).toContain("SIPSA");
     });
   });

@@ -166,13 +166,14 @@ describe("Phase 3: Fault Injection, Malformed Payloads & Error Resilience", () =
   });
 
   describe("4. Granadilla Invariant & Static Contract Safety", () => {
-    it("strictly preserves the unavailable invariant for granadilla across all service calls", async () => {
+    it("strictly preserves national wholesale price for granadilla across all service calls", async () => {
       const service = new CommodityService();
       const granadilla = await service.getCommodityPrice("granadilla");
 
       expect(granadilla.crop).toBe("granadilla");
-      expect(granadilla.price).toBeNull();
-      expect(granadilla.referenceType).toBe("unavailable");
+      expect(granadilla.price).toBe(9600);
+      expect(granadilla.unit).toBe("COP/kg");
+      expect(granadilla.referenceType).toBe("national_wholesale");
       expect(granadilla.disclaimer).toBeDefined();
       expect(granadilla.disclaimer.length).toBeGreaterThan(20);
     });

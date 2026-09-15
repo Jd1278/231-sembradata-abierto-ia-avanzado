@@ -77,11 +77,12 @@ Pronóstico:    Theil-Sen Robust Estimator con Intervalos L80/U80/L95/U95
 - **Instrumentos internacionales:**
   - **Cacao:** ICE US Cocoa (CC) — Futuros de Nueva York en USD/MT.
   - **Café:** ICE US Coffee C (KC) — Futuros de Nueva York en ¢/lb.
-- **Instrumento nacional:**
-  - **Granadilla:** Mercado nacional mayorista DANE / SIPSA (Centroabastos Bucaramanga).
+- **Instrumento nacional mayorista:**
+  - **Granadilla:** Mercado nacional mayorista **DANE / SIPSA (Centroabastos Bucaramanga)**. Cotización oficial de $120.000 COP por caja de 12.5 kg (**$9.600 COP/kg**) al 12 de septiembre de 2026. No representa precio internacional ni compra directa en finca.
 - **Estrategia de Resiliencia (_Stale-While-Revalidate_):**
-  - Si el proveedor en vivo entrega señales climáticas pero `currentPrice: null`, se fusionan las señales climáticas en vivo con la última cotización real en caché persistente (`commodity_cache` en Supabase / FRED / ICE).
-  - Cada commodity se consulta de manera independiente mediante `Promise.allSettled`.
+  - Para Café y Cacao, si el proveedor en vivo entrega señales climáticas pero `currentPrice: null` o falla la red, se utiliza la cotización real en caché persistente (`commodity_cache` en Supabase / FRED / ICE).
+  - Para Granadilla, se consulta la persistencia de SIPSA en `commodity_cache` y `commodity_prices` en Supabase.
+  - Cada producto se consulta de manera independiente mediante `Promise.allSettled`.
 
 ---
 

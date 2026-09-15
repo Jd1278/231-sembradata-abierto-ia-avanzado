@@ -84,15 +84,16 @@ describe("Phase 6 Fixes Validation Suite", () => {
   });
 
   describe("3. Commodity Service Robust States & Granadilla Handling", () => {
-    it("returns permanent unavailable state for Granadilla with SIPSA reference", async () => {
+    it("returns real national wholesale price for Granadilla with SIPSA reference", async () => {
       const service = new CommodityService();
       const price = await service.getCommodityPrice("granadilla");
 
       expect(price.crop).toBe("granadilla");
-      expect(price.referenceType).toBe("unavailable");
-      expect(price.status).toBe("unavailable");
-      expect(price.price).toBeNull();
-      expect(price.sources).toContain("DANE SIPSA (referencia nacional)");
+      expect(price.referenceType).toBe("national_wholesale");
+      expect(price.price).toBe(9600);
+      expect(price.unit).toBe("COP/kg");
+      expect(price.currency).toBe("COP");
+      expect(price.sources).toContain("DANE - SIPSA");
     });
 
     it("returns structured unavailable state when external market API fails without crashing", async () => {
@@ -121,7 +122,8 @@ describe("Phase 6 Fixes Validation Suite", () => {
       expect(prices.map((p) => p.crop)).toEqual(["cafe", "cacao", "granadilla"]);
       expect(prices[0].status).toBe("unavailable");
       expect(prices[1].status).toBe("unavailable");
-      expect(prices[2].status).toBe("unavailable");
+      expect(prices[2].status).toBe("cached");
+      expect(prices[2].price).toBe(9600);
     });
   });
 

@@ -125,31 +125,82 @@ export function CommoditySection({ activeCrop }: Props) {
     );
   }
 
-  // Handle Granadilla (No International Futures)
-  if (active.referenceType === "unavailable" || activeCrop === "granadilla") {
+  // Handle Granadilla (Mercado Nacional - SIPSA / DANE)
+  if (
+    activeCrop === "granadilla" ||
+    active.referenceType === "national_wholesale" ||
+    active.marketType === "national_wholesale"
+  ) {
     return (
       <Card className="rounded-2xl">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold">Precio de Referencia Nacional</CardTitle>
-            <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
-              Referencia Nacional (DANE / SIPSA)
+            <CardTitle className="text-sm font-semibold text-foreground">
+              Mercado Nacional
+            </CardTitle>
+            <Badge
+              variant="outline"
+              className="text-[10px] text-emerald-700 dark:text-emerald-300 border-emerald-500/30 bg-emerald-500/10"
+            >
+              Precio Mayorista (SIPSA / DANE)
             </Badge>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Granadilla (Passiflora ligularis) · Comercialización Nacional (Sin futuros
-            internacionales ICE)
+            Granadilla (Passiflora ligularis) · {active.market}
           </p>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-xs leading-relaxed text-muted-foreground">{active.disclaimer}</p>
-          <div className="rounded-xl border border-border p-3 bg-muted/20">
-            <p className="text-[11px] font-medium text-foreground">
-              Referencia de precios en Colombia:
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-              Consulte el boletín de precios mayoristas del DANE (SIPSA) para la Central de Abastos
-              de Bucaramanga (Centroabastos) y plazas mayoristas de Santander.
+
+        <CardContent className="space-y-4">
+          {/* Main Price Display */}
+          <div className="grid grid-cols-2 gap-3 rounded-xl border border-border p-3 bg-muted/20">
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Precio Mayorista
+              </span>
+              <p className="text-lg font-bold text-foreground mt-0.5">
+                {active.price !== null ? `$${active.price.toLocaleString("es-CO")}` : "—"}{" "}
+                <span className="text-xs font-normal text-muted-foreground">COP/kg</span>
+              </p>
+              <span className="text-[10px] text-muted-foreground">
+                {active.contract || "Caja 12.5 kg ($120.000 COP)"}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Mercado y Fecha
+              </span>
+              <p className="text-xs font-semibold text-foreground mt-1">
+                Centroabastos - Bucaramanga
+              </p>
+              <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                <Clock className="h-3 w-3" />
+                Fecha:{" "}
+                {active.sourceTimestamp
+                  ? new Date(active.sourceTimestamp).toLocaleDateString("es-CO", {
+                      timeZone: "UTC",
+                    })
+                  : "12/09/2026"}
+              </span>
+            </div>
+          </div>
+
+          {/* Market Analysis / Context */}
+          {active.reasoning && (
+            <div className="space-y-1">
+              <span className="text-[11px] font-medium text-foreground">
+                Canal de Comercialización:
+              </span>
+              <p className="text-xs leading-relaxed text-muted-foreground">{active.reasoning}</p>
+            </div>
+          )}
+
+          {/* Mandatory Regulatory Disclaimer */}
+          <div className="rounded-xl border border-border/80 p-2.5 bg-muted/10 flex items-start gap-2">
+            <ShieldAlert className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+            <p className="text-[10px] leading-relaxed text-muted-foreground">
+              {active.disclaimer ||
+                "Este valor corresponde a una cotización mayorista observada en un mercado de Colombia (DANE/SIPSA). No representa un precio internacional ni necesariamente el precio recibido por el productor."}
             </p>
           </div>
         </CardContent>

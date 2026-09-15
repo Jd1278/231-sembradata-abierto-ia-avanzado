@@ -115,8 +115,9 @@ describe("Phase 7: Full System Validation Suite", () => {
       const service = new CommodityService(dummyProvider);
       const res = await service.getCommodityPrice("granadilla");
 
-      expect(res.referenceType).toBe("unavailable");
-      expect(res.price).toBeNull();
+      expect(res.crop).toBe("granadilla");
+      expect(res.price).toBe(9600);
+      expect(res.currency).toBe("COP");
       expect(res.disclaimer).toContain("SIPSA");
     });
 

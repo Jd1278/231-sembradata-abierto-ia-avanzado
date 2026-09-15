@@ -112,9 +112,12 @@ describe("Comprehensive Historical Yield & Commodity Pipeline Audit", () => {
     it("strictly preserves national market disclaimer for Granadilla", async () => {
       const granadilla = await service.getCommodityPrice("granadilla");
       expect(granadilla.crop).toBe("granadilla");
-      expect(granadilla.status).toBe("unavailable");
-      expect(granadilla.sources).toContain("DANE SIPSA (referencia nacional)");
-      expect(granadilla.disclaimer).toContain("Centroabastos (Bucaramanga)");
+      expect(granadilla.price).toBe(9600);
+      expect(granadilla.currency).toBe("COP");
+      expect(granadilla.unit).toBe("COP/kg");
+      expect(granadilla.market).toContain("Centroabastos");
+      expect(granadilla.sources).toContain("DANE - SIPSA");
+      expect(granadilla.disclaimer).toContain("Centroabastos");
     });
   });
 });
